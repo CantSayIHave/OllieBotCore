@@ -13,6 +13,9 @@ import discord
 #   - is_quote: whether command is quote - content + @ca + author
 #   - high_permissions: whether response requires high permissions
 #   - spam_timer: set to None to delete
+#   - timer: holds actual time value
+#   - search_type: 'explicit' or  'contains' for how to find response
+#   - delete: timer to delete response
 #
 #  |Methods|
 #   - add_author: append author suffix and author to content
@@ -31,6 +34,7 @@ class Response:
         self.is_quote = kwargs.get('is_quote', False)
         self.search_type = kwargs.get('search_type', 'explicit')
         self.delete = kwargs.get('delete', 10)
+        self.mentions = kwargs.get('mentions', [])  # list of strings (id's)
 
         if self.is_num(self.delete):
             self.delete = int(self.delete)
@@ -97,6 +101,27 @@ class Response:
             return None
 
 
+# Class ResponseLibrary:
+#  |Attributes|
+#   - responses: list of Response objects
+#   - response_ids: names and ids of response objects for faster searching
+#   - g_spam_timer: default global spam timer
+#
+#  |Methods|
+#   - add: add a response to `responses`
+#   - edit: edit a response
+#   - remove: remove a response
+#   - get: gets a response by name/id
+#   - has: checks for membership of a name/id
+#   - get_occurrence: retrieves a response from a message by occurrence anywhere
+#   - get_explicit: retrieves a response from a message by splitting and searching
+#   - get_processed: returns processed embed or string of a response given context
+#   - dec_spam_timers: decrease all spam timers by a value
+#   - interpret_response: interprets and processes tags in response content
+#   - fix_album_full: fixes albums by breaking down and rebuilding
+#   - fix_album: fixes albums by replacing known errors
+
+
 class ResponseLibrary:
     def __init__(self, spam_timer: int):
         self.responses = []  #: :type: list of Response
@@ -118,20 +143,15 @@ class ResponseLibrary:
         if 'name' in changes:
             try:
                 self.response_ids.remove(resp.name)
-            except ValueError:
+            except (ValueError, AttributeError):
                 pass
             self.response_ids.append(changes['name'])
         if 'id' in changes:
             try:
                 self.response_ids.remove(resp.id)
-            except ValueError:
+            except (ValueError, AttributeError):
                 pass
             self.response_ids.append(changes['id'])
-
-        if 'id' in changes:
-            if resp.id:
-                if resp.id in self.response_ids:
-                    self.response_ids.remove(resp.id)
 
         resp.edit(**changes)
 
@@ -184,7 +204,7 @@ class ResponseLibrary:
         for word in pieces:
             r = self.get(word)
             if r:
-                if r.search_type == 'explicit':
+                if r.search_type == 'explicit' and not r.is_command:
                     return r
         return None
 
@@ -293,7 +313,7 @@ class ResponseLibrary:
         return ' @r '.join(nrkeys)
 
     # fixes albums by replacing known errors
-    # O(i don't know)
+    # O(i don't know) (probably faster?)
     @staticmethod
     def fix_album(text: str) -> str:
         text = text.replace('@u', '')

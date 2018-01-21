@@ -99,7 +99,7 @@ class Feeds:
                         return
 
                     if get_rss(in_server, add_channel.id, ytchannel['id']):  # if rss exists, cancel
-                        await self.bot.say('User `' + ytchannel['snippet']['title'] +
+                        await self.bot.say('User `' + ytchannel['snippet'].title +
                                            '` already has a YouTube feed on this channel')
                         return
 
@@ -108,9 +108,9 @@ class Feeds:
                                           'last_id': 'h',
                                           'last_time': 'h',
                                           'type': 'youtube',
-                                          'title': ytchannel['snippet']['title']})
+                                          'title': ytchannel['snippet'].title})
                     writeRss(self.bot, in_server)
-                    await self.bot.say('Added YouTube feed for `' + ytchannel['snippet']['title'] +
+                    await self.bot.say('Added YouTube feed for `' + ytchannel['snippet'].title +
                                        '` to ' + add_channel.mention)
                     rss_timer = 70
 
@@ -148,11 +148,11 @@ class Feeds:
                 r_feed = None
                 for r in in_server.rss:
                     if len(r) >= 5:
-                        if r['title'] == user:
+                        if r.title == user:
                             r_feed = r
 
                 if r_feed:
-                    await self.bot.say('Removed Twitch feed for `' + r_feed['title'] +
+                    await self.bot.say('Removed Twitch feed for `' + r_feed.title +
                                        '` from ' + add_channel.mention)
                     in_server.rss.remove(r_feed)
                     writeRss(self.bot, in_server)
@@ -164,12 +164,12 @@ class Feeds:
                 r_feed = None
                 for r in in_server.rss:
                     if len(r) >= 5:
-                        if r['title'] == user:
+                        if r.title == user:
                             r_feed = r
                             break
 
                 if r_feed:
-                    await self.bot.say('Removed YouTube feed for `' + r_feed['title'] +
+                    await self.bot.say('Removed YouTube feed for `' + r_feed.title +
                                        '` from ' + add_channel.mention)
                     in_server.rss.remove(r_feed)
                     writeRss(self.bot, in_server)
@@ -193,23 +193,23 @@ class Feeds:
                 for r in in_server.rss:
                     if r:
                         if arg == 'debug':
-                            if r['type'] == 'twitter':
-                                out_str += 'User `@{0}` has a Twitter feed on <#{1}>, LID: {2}\n'.format(r['uid'],
-                                                                                                         r['channel'],
-                                                                                                         r['last_id'])
-                            elif r['type'] == 'youtube':
+                            if r.type == 'twitter':
+                                out_str += 'User `@{0}` has a Twitter feed on <#{1}>, LID: {2}\n'.format(r.uid,
+                                                                                                         r.channel_id,
+                                                                                                         r.last_id)
+                            elif r.type == 'youtube':
                                 out_str += 'User `{0}` has a YouTube feed on <#{1}>, LID: {2}, CHID: {3}\n'.format(
-                                    r['title'], r['channel'], r['last_id'], r['uid'])
-                            elif r['type'] == 'twitch':
+                                    r.title, r.channel_id, r.last_id, r.uid)
+                            elif r.type == 'twitch':
                                 out_str += 'User `{0}` has a Twitch feed on <#{1}>, LID: {2}, CHID: {3},\n'.format(
-                                    r['title'], r['channel'], r['last_id'], r['uid'])
+                                    r.title, r.channel_id, r.last_id, r.uid)
                         else:
-                            if r['type'] == 'twitter':
-                                out_str += 'User `@' + r['uid'] + '` has a Twitter feed on <#' + r['channel'] + '>\n'
-                            elif r['type'] == 'youtube':
-                                out_str += 'User `' + r['title'] + '` has a YouTube feed on <#' + r['channel'] + '>\n'
-                            elif r['type'] == 'twitch':
-                                out_str += 'User `' + r['title'] + '` has a Twitch feed on <#' + r['channel'] + '>\n'
+                            if r.type == 'twitter':
+                                out_str += 'User `@' + r.uid + '` has a Twitter feed on <#' + r.channel_id + '>\n'
+                            elif r.type == 'youtube':
+                                out_str += 'User `' + r.title + '` has a YouTube feed on <#' + r.channel_id + '>\n'
+                            elif r.type == 'twitch':
+                                out_str += 'User `' + r.title + '` has a Twitch feed on <#' + r.channel_id + '>\n'
 
                 await self.bot.say(out_str)
 
@@ -226,11 +226,11 @@ class Feeds:
                 return
 
             for r in in_server.rss:
-                if (feed_type.lower() == r['type']) and (user == r['title']):
-                    r['last_id'] = 'none'
-                    last_time = datetime.strptime(r['last_time'][:r['last_time'].find('.')], '%Y-%m-%dT%H:%M:%S')
+                if (feed_type.lower() == r.type) and (user == r.title):
+                    r.last_id = 'none'
+                    last_time = datetime.strptime(r.last_time[:r.last_time.find('.')], '%Y-%m-%dT%H:%M:%S')
                     last_time = last_time.replace(year=last_time.year - 1)
-                    r['last_time'] = last_time.strftime('%Y-%m-%dT%H:%M:%S') + '.'
+                    r.last_time = last_time.strftime('%Y-%m-%dT%H:%M:%S') + '.'
                     rss_timer = 70
 
         @rss.command(pass_context=True)
@@ -264,88 +264,88 @@ class Feeds:
 
 
 def scrape_twitter(b, s, r):
-    t_feed = twitter_api.GetUserTimeline(screen_name=r['uid'], count=1)
+    t_feed = twitter_api.GetUserTimeline(screen_name=r.uid, count=1)
     if t_feed:
         last_tweet = t_feed[0]
         if last_tweet:
-            if str(last_tweet.id) != str(r['last_id']):
-                if str(r['last_id']) == 'h':
+            if str(last_tweet.id) != str(r.last_id):
+                if str(r.last_id) == 'h':
                     proxy_message(b.bot,
-                                  r['channel'],
+                                  r.channel_id,
                                   'Twitter feed for `@{0}` has now been enabled.\n'
-                                  'https://twitter.com/{0}/status/{1}'.format(r['uid'], str(last_tweet.id)))
+                                  'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
                 else:
                     if last_tweet.text:
                         if last_tweet.text[0] != '@':
                             proxy_message(b.bot,
-                                          r['channel'],
-                                          'https://twitter.com/{0}/status/{1}'.format(r['uid'], str(last_tweet.id)))
+                                          r.channel_id,
+                                          'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
                     else:
                         proxy_message(b.bot,
-                                      r['channel'],
-                                      'https://twitter.com/{0}/status/{1}'.format(r['uid'], str(last_tweet.id)))
+                                      r.channel_id,
+                                      'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
 
-                r['last_id'] = str(last_tweet.id)
+                r.last_id = str(last_tweet.id)
                 writeRss(b.bot, s)  # bot, server
 
 
 async def scrape_youtube(b, s, r):
     search = None
     try:
-        search = await yt.get_channel_videos(r['uid'], 1)
+        search = await yt.get_channel_videos(r.uid, 1)
     except Exception as e:
         print(e)
     if search:
         last_vid = search[0]
-        if last_vid['id']['videoId'] != str(r['last_id']):
-            if str(r['last_id']) == 'h':
-                proxy_message(b.bot, r['channel'],
+        if last_vid['id']['videoId'] != str(r.last_id):
+            if str(r.last_id) == 'h':
+                proxy_message(b.bot, r.channel_id,
                               'Youtube feed for {} has now been enabled. All future '
                               'updates will now push `@everyone` mentions for '
                               'visibility. Here is the most recent video for this'
                               'channel:\n'
                               'https://www.youtube.com/watch?v={}'
-                              ''.format(str(r['title']), last_vid['id']['videoId']))
-                r['last_time'] = last_vid['snippet']['publishedAt']
-                r['last_id'] = last_vid['id']['videoId']
+                              ''.format(str(r.title), last_vid['id']['videoId']))
+                r.last_time = last_vid['snippet']['publishedAt']
+                r.last_id = last_vid['id']['videoId']
                 writeRss(b.bot, s)  # bot, server
             else:
                 dtime_seq = last_vid['snippet']['publishedAt']
                 this_time = datetime.strptime(dtime_seq[:dtime_seq.find('.')],
                                               '%Y-%m-%dT%H:%M:%S')
-                last_time = datetime.strptime(r['last_time'][:r['last_time'].find('.')],
+                last_time = datetime.strptime(r.last_time[:r.last_time.find('.')],
                                               '%Y-%m-%dT%H:%M:%S')
                 if this_time > last_time:
-                    proxy_message(b.bot, r['channel'],
+                    proxy_message(b.bot, r.channel_id,
                                   '@everyone\n{} has a new video!\n'
                                   'https://www.youtube.com/watch?v={}'
-                                  ''.format(str(r['title']), last_vid['id']['videoId']))
-                    r['last_time'] = last_vid['snippet']['publishedAt']
-                    r['last_id'] = last_vid['id']['videoId']
+                                  ''.format(str(r.title), last_vid['id']['videoId']))
+                    r.last_time = last_vid['snippet']['publishedAt']
+                    r.last_id = last_vid['id']['videoId']
                     writeRss(b.bot, s)  # bot, server
 
 
 async def scrape_twitch(b, s, r):
     stream = None
     try:
-        stream = await twitch.get_stream(r['uid'])
+        stream = await twitch.get_stream(r.uid)
     except ValueError as e:
         print(e)
     if stream:
-        if (str(stream['stream']['_id']) != str(r['last_id'])) and (str(r['last_id']) != 'h') and (
-                    str(r['last_id']) != 'd'):
-            proxy_message(b.bot, r['channel'],
+        if (str(stream['stream']['_id']) != str(r.last_id)) and (str(r.last_id) != 'h') and (
+                    str(r.last_id) != 'd'):
+            proxy_message(b.bot, r.channel_id,
                           '{} is now streaming!\nhttps://www.twitch.tv/{}'
-                          ''.format(str(r['title']), r['user']))
-            r['last_id'] = str(stream['stream']['_id'])
+                          ''.format(str(r.title), r.user))
+            r.last_id = str(stream['stream']['_id'])
             writeRss(b.bot, s)  # bot, server
     else:
-        if str(r['last_id']) == 'h':
-            proxy_message(b.bot, r['channel'],
+        if str(r.last_id) == 'h':
+            proxy_message(b.bot, r.channel_id,
                           'Twitch feed for {} has now been enabled. Here is the most '
                           'recent activity:\nhttps://www.twitch.tv/{}'
-                          ''.format(str(r['title']), r['user']))
-            r['last_id'] = '111000'  # doesn't matter what this is
+                          ''.format(str(r.title), r.user))
+            r.last_id = '111000'  # doesn't matter what this is
             writeRss(b.bot, s)
 
 

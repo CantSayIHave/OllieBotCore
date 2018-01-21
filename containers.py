@@ -8,11 +8,12 @@ class BlockItem:
 class Feed:
     def __init__(self, **kwargs):
         self.uid = kwargs.get('uid', '')
-        self.channel_id = kwargs.get('channel_id', '')
+        self.channel_id = kwargs.get('channel', '')
         self.last_id = kwargs.get('last_id', '')
         self.last_time = kwargs.get('last_time', '')
         self.type = kwargs.get('type', '')
         self.title = kwargs.get('title', '')
+        self.user = kwargs.get('user', '')
 
 
 class MutedMember:

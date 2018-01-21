@@ -217,7 +217,7 @@ def writeBot(b):
             json.dump(s_quotes, fi)
 
         with open('bots/' + bc.name + '/' + s.name + '/' + 'rss.json', 'w') as fi:
-            s_rss = {'rss': s.rss}
+            s_rss = {'rss': [x.__dict__ for x in s.rss]}
 
             json.dump(s_rss, fi)
 

@@ -12,6 +12,7 @@ from containers import *
 
 # custom help dict to hold data on command accessibility
 help_args = {'clear': {'d': 'clear bot messages', 'm': True},
+             'cat': {'d': 'summon a cat', 'm': False},
              'convert': {'d': 'convert image to different format', 'm': False},
              'b-ify': {'d': 'add some 🅱️ to text', 'm': False},
              'bigtext': {'d': 'transform text into regional indicators', 'm': False},
@@ -25,18 +26,22 @@ help_args = {'clear': {'d': 'clear bot messages', 'm': True},
              'perm': {'d': 'set user permissions', 'm': True},
              'playing': {'d': "set bot's 'playing' message", 'm': True},
              'prefix': {'d': "set bot's command prefix", 'm': True},
-             'quote': {'d': 'manage/call quotes', 'm': False},
+             'quote': {'d': 'manage/call quotes', 'm': True},
+             'react': {'d': 'react to a message with bigtext', 'm': False},
              'reee': {'d': 'manage autistic screaming response', 'm': True},
+             'response': {'d': 'manage custom responses', 'm': True},
              'role': {'d': 'automate mass roll assignments', 'm': True},
              'roll': {'d': 'dice roller', 'm': False},
              'rss': {'d': 'manage rss feeds for each channel', 'm': True},
              'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
              'think': {'d': 'really makes you think', 'm': False},
              'thinke': {'d': 'really makes you think about emotes', 'm': False},
+             'thinkpfp': {'d': 'really makes you think about pfps', 'm': False},
              'unblock': {'d': 'unblock commands', 'm': True},
              'usrjoin': {'d': 'manage message to new users', 'm': True},
              'ytdl': {'d': 'youtube to mp3 converter', 'm': True},
-             'wiki': {'d': 'search Wikipedia for something', 'm': False}}
+             'wiki': {'d': 'search Wikipedia for something', 'm': False},
+             'woof': {'d': 'summon a woof', 'm': False}}
 
 
 class ServerUtils:
@@ -475,44 +480,114 @@ class ServerUtils:
         @self.bot.command(pass_context=True)
         async def help(ctx):
             global help_args
-            em = discord.Embed(title='Commands:', description='───────────────────────────', color=0xff0000)
-            em.set_author(name=self.bot.user.name + ' Help', icon_url=self.bot.user.avatar_url)
-            sorted_args = sorted(help_args)
-            if has_high_permissions(ctx.message.author, b=self.bot):
-                for arg in sorted_args[:-1]:
+
+            field_limit = 10
+            high_perm = has_high_permissions(ctx.message.author, b=self.bot)
+
+            def get_page(page_num: int, args: list):
+                limit = len(args) / field_limit
+                if int(limit) != limit:
+                    limit = int(limit + 1)
+
+                limit = int(limit)
+
+                if page_num < 1:
+                    page_num = 1
+                if page_num > limit:
+                    page_num = limit
+
+                l_start = int(field_limit * (page_num - 1))
+                if len(args) > (l_start + field_limit):
+                    page_list = args[l_start:l_start + field_limit]
+                else:
+                    page_list = args[l_start:len(args)]
+
+                em = discord.Embed(title='───────────────────────', color=0xff0000)
+                em.set_author(name='Command Help - Page {}/{}'.format(int(page_num), int(limit)),
+                              icon_url='https://abs.twimg.com/emoji/v2/72x72/2753.png')
+
+                for arg in page_list:  # type: str
                     em.add_field(name=arg,
                                  value=help_args[arg]['d'].capitalize(),
                                  inline=False)
-                em.add_field(name=sorted_args[-1],
-                             value=help_args[sorted_args[-1]]['d'].capitalize() + '\n\n───────────────────────────\n',
-                             inline=False)
-            else:
-                for arg in sorted_args[:-1]:
-                    if not help_args[arg]['m']:
-                        em.add_field(name=arg,
-                                     value=help_args[arg]['d'].capitalize(),
-                                     inline=False)
-                if not help_args[sorted_args[-1]]['m']:
-                    em.add_field(name=sorted_args[-1],
-                                 value=help_args[sorted_args[-1]]['d'].capitalize() + '\n\n───────────────────────────\n',
+
+                return em
+
+            sorted_args = sorted(help_args)
+
+            for arg in sorted_args[:]:
+                if not high_perm:
+                    if help_args[arg]['m']:
+                        sorted_args.remove(arg)
+
+            current_page = 1
+
+            em = get_page(current_page, sorted_args)
+
+            base_message = await self.bot.send_message(ctx.message.author, embed=em)
+            await self.bot.add_reaction(base_message, '⏮')
+            await self.bot.add_reaction(base_message, '⏪')
+            await self.bot.add_reaction(base_message, '⏩')
+            await self.bot.add_reaction(base_message, '⏭')
+            await self.bot.add_reaction(base_message, '❌')
+            await self.bot.add_reaction(base_message, 'ℹ')
+            await self.bot.wait_for_reaction('ℹ', message=base_message)
+            while True:
+                reaction, user = await self.bot.wait_for_reaction(['⏮', '⏪', '⏩', '⏭', '❌', 'ℹ'],
+                                                                  message=base_message,
+                                                                  timeout=120)
+
+                if not reaction:
+                    break
+
+                limit = len(sorted_args) / field_limit
+                if int(limit) != limit:
+                    limit = int(limit + 1)
+
+                recent_page = current_page
+
+                choice = str(reaction.emoji)
+                if choice == '⏮':
+                    current_page = 1
+                elif choice == '⏪':
+                    current_page -= 1
+                    if current_page < 1:
+                        current_page = 1
+                elif choice == '⏩':
+                    current_page += 1
+                    if current_page > limit:
+                        current_page = limit
+                elif choice == '⏭':
+                    current_page = limit
+                elif choice == '❌':
+                    await self.bot.delete_message(base_message)
+                    break
+
+                if current_page != recent_page:
+                    em = get_page(current_page, sorted_args)
+                    base_message = await self.bot.edit_message(base_message, embed=em)
+
+                if choice == 'ℹ':
+                    em = discord.Embed(title='───────────────────────', color=0xff0000)
+                    em.set_author(name='Command Help - Info',
+                                  icon_url='https://abs.twimg.com/emoji/v2/72x72/2139.png')
+
+                    out_str = 'Commands follow the format\n\n`'
+                    out_str += '{0}command <required arguments> [optional arguments]`\n\n' \
+                               'Note that `optional arguments` means an argument must be provided, ' \
+                               'but it can be anything. For example, in:\n\n' \
+                               '`{0}music <play/queue> [link/query/search number]`\n\n' \
+                               'the arguments provided in <play/queue> **must** be either `play` ' \
+                               'or `queue`, but the next argument may be either a youtube link, ' \
+                               'a query, or a search result number like so:\n\n`' + \
+                               '{0}music play https://www.youtube.com/watch?v=tVj0ZTS4WF4`\n\n' \
+                               'To learn more about the syntax of each command, call `' + \
+                               '{0}[command] help`'
+                    em.add_field(name='__Command Syntax__',
+                                 value=out_str.format(self.bot.command_prefix),
                                  inline=False)
 
-            out_str = 'Commands follow the format\n\n`'
-            out_str += '{0}command <required arguments> [optional arguments]`\n\n' \
-                       'Note that `optional arguments` means an argument must be provided, ' \
-                       'but it can be anything. For example, in:\n\n' \
-                       '`{0}music <play/queue> [link/query/search number]`\n\n' \
-                       'the arguments provided in <play/queue> **must** be either `play` ' \
-                       'or `queue`, but the next argument may be either a youtube link, ' \
-                       'a query, or a search result number like so:\n\n`' + \
-                       '{0}music play https://www.youtube.com/watch?v=tVj0ZTS4WF4`\n\n' \
-                       'To learn more about the syntax of each command, call `' + \
-                       '{0}[command] help`'
-            em.add_field(name='__Command Syntax__',
-                         value=out_str.format(self.bot.command_prefix),
-                         inline=False)
-
-            await self.bot.send_message(ctx.message.author, embed=em)
+                    await self.bot.edit_message(base_message, embed=em)
 
         @self.bot.group(pass_context=True)
         async def emotes(ctx):

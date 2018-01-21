@@ -9,6 +9,8 @@ import io
 import youtube_dl
 import wikipedia
 import time
+import shlex
+from PIL import Image
 from wikipedia import DisambiguationError
 from wikipedia import PageError
 from global_util import *
@@ -24,6 +26,19 @@ num2word = {'0': 'zero',
             '7': 'seven',
             '8': 'eight',
             '9': 'nine'}
+
+num2regional = {0: '0⃣',
+                1: '1⃣',
+                2: '2⃣',
+                3: '3⃣',
+                4: '4⃣',
+                5: '5⃣',
+                6: '6⃣',
+                7: '7⃣',
+                8: '8⃣',
+                9: '9⃣',}
+
+regional2num = {v: k for k, v in num2regional.items()}
 
 
 class Fun:
@@ -844,6 +859,70 @@ class Fun:
                 m = await self.bot.say('An error occurred while searching.')
                 schedule_delete(self.bot, m, 5)
 
+        @self.bot.command(pass_context=True)
+        async def poll(ctx, *, args: str):
+            in_args = self.strip_args(args)
+            options = []
+            for a, o in in_args:
+                if a == 'option':
+                    options.append(o)
+
+            while len(options) > 9:
+                options.pop()
+
+            scores = {}
+            for i, o in enumerate(options):
+                scores[i+1] = 0
+
+            def get_poll(scores: dict, options: list):
+                em = discord.Embed(title='───────────────────────', color=random.randint(0, 0xffffff))
+                em.set_author(name='Poll', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4ca.png')
+
+                poll_bar = '🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲'
+
+                total = 0
+                for v in scores.values():
+                    total += v
+                if total == 0:
+                    for o in options:
+                        em.add_field(name=o, value='0%', inline=False)
+                    return em
+                else:
+                    for i, o in enumerate(options):
+                        percent = round(scores[i+1]/total, 1)
+                        em.add_field(name=o,
+                                     value='{} {}%'.format(poll_bar[:int(len(poll_bar) * percent)], round(percent * 100)),
+                                     inline=False)
+                    return em
+
+            em = get_poll(scores, options)
+
+            base_message = await self.bot.send_message(ctx.message.channel, embed=em)
+            reactions = []
+            has_voted = []
+            for i, o in enumerate(options):
+                await self.bot.add_reaction(base_message, num2regional[i+1])
+                reactions.append(num2regional[i+1])
+            await self.bot.wait_for_reaction(num2regional[len(options)])
+            while True:
+                reaction, user = await self.bot.wait_for_reaction(reactions,
+                                                                  message=base_message,
+                                                                  timeout=180)
+                if not reaction:
+                    break
+
+                current_voted = len(has_voted)
+
+                if user.id not in has_voted:
+                    choice = str(reaction.emoji)
+                    if choice in reactions:
+                        has_voted.append(user.id)
+                        scores[regional2num[choice]] += 1
+
+                if len(has_voted) > current_voted:
+                    em = get_poll(scores, options)
+                    await self.bot.edit_message(base_message, embed=em)
+
     @staticmethod
     def is_num(text: str):
         try:
@@ -900,6 +979,17 @@ class Fun:
             return num
         except ValueError:
             return None
+
+    @staticmethod
+    def strip_args(args: str) -> list:
+        arg_list = shlex.split(args, ' ')
+        out_list = []
+        for a in arg_list:
+            if a:
+                pieces = a.split('=')
+                out_list.append((pieces[0], pieces[1]))
+        return out_list
+
 
 
 def setup(bot):

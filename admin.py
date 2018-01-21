@@ -6,11 +6,13 @@ import asyncio
 import shlex
 import global_util
 from global_util import *
+from server_utils import help_args
 
 
 class Admin:
     def __init__(self, bot: discord.ext.commands.Bot):
         self.bot = bot
+        self.help_args = help_args
 
         @self.bot.command(pass_context=True)
         async def repl(ctx, user: discord.Member = None):

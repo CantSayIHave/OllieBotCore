@@ -483,7 +483,9 @@ with open('globals/bots.json', 'r') as f:
 
                 with open('bots/' + b_name + '/' + s_name + '/' + 'rss.json', 'r') as fi:
                     server_rss = json.load(fi)
-                    s_rss = server_rss['rss']  # should be a list of dicts
+                    s_rss = []
+                    for rss in server_rss['rss']:
+                        s_rss.append(Feed(**rss))
 
                 with open('bots/' + b_name + '/' + s_name + '/' + 'music.json', 'r') as fi:
                     s_queue = []

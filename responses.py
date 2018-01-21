@@ -31,7 +31,7 @@ correct_to_display = {v: a for a, v in display_to_correct.items()}
 
 
 class Responses:
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
         @self.bot.group(pass_context=True)
@@ -191,6 +191,11 @@ class Responses:
                                    ''.format(name, self.bot.command_prefix))
                 return
 
+            if self.bot.get_command(name=name):
+                await self.bot.say('`{}` already exists as a default command, so it may not be used.'
+                                   ''.format(name))
+                return
+
             add_dict = self.process_args(args, force_content=True)
             add_dict['name'] = name
             if '```' not in add_dict['content']:
@@ -256,6 +261,12 @@ class Responses:
                 if '```' not in add_dict['content']:
                     add_dict['content'] = add_dict['content'].replace('`', '')
 
+            if 'name' in add_dict:
+                if self.bot.get_command(add_dict['name']):
+                    await self.bot.say('`{}` already exists as a default command, so it may not be used.'
+                                       ''.format(add_dict['name']))
+                    add_dict.pop('name')
+
             r = in_server.response_lib.edit(resp, add_dict)
 
             writeResponses(self.bot, in_server)
@@ -311,6 +322,7 @@ class Responses:
             em.add_field(name='content', value=options['content'])
             await self.bot.say(embed=em)
 
+        """
         @response.command(pass_context=True)
         async def listall(ctx):
             if not ctx.message.server:
@@ -343,7 +355,101 @@ class Responses:
                         em = discord.Embed(title='───────────────────────', color=0xff00dc)
                         index = 0
 
-            await self.bot.say(embed=em)
+            await self.bot.say(embed=em)"""
+
+        @response.command(pass_context=True)
+        async def listall(ctx):
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = get_server(ctx.message.server.id, self.bot)
+
+            if not has_high_permissions(ctx.message.author, in_server):
+                return
+
+            field_limit = 10
+
+            def get_page(page_num: int, responses: list):
+                limit = len(responses) / field_limit
+                if int(limit) != limit:
+                    limit = int(limit + 1)
+
+                limit = int(limit)
+
+                if page_num < 1:
+                    page_num = 1
+                if page_num > limit:
+                    page_num = limit
+
+                l_start = int(field_limit * (page_num - 1))
+                if len(responses) > (l_start + field_limit):
+                    page_list = responses[l_start:l_start + field_limit]
+                else:
+                    page_list = responses[l_start:len(responses)]
+
+                em = discord.Embed(title='───────────────────────', color=0xff00dc)  # pink
+                em.set_author(name='Response List - Page {}/{}'.format(int(page_num), int(limit)),
+                              icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png')
+
+                for r in page_list:  # type: Response
+                    a_type = 'command'
+                    r_type = 'text'
+                    if r.is_image:
+                        r_type = 'image'
+                    elif r.is_quote:
+                        r_type = 'quote'
+                    if not r.is_command:
+                        a_type = 'keyword'
+                    em.add_field(name=r.name, value='{}, {}'.format(a_type, r_type), inline=False)
+
+                return em
+
+            current_page = 1
+
+            em = get_page(current_page, in_server.response_lib.responses)
+
+            base_message = await self.bot.send_message(ctx.message.channel, embed=em)
+            await self.bot.add_reaction(base_message, '⏮')
+            await self.bot.add_reaction(base_message, '⏪')
+            await self.bot.add_reaction(base_message, '⏩')
+            await self.bot.add_reaction(base_message, '⏭')
+            await self.bot.add_reaction(base_message, '❌')
+            await self.bot.wait_for_reaction('❌', message=base_message)
+            while True:
+                reaction, user = await self.bot.wait_for_reaction(['⏮', '⏪', '⏩', '⏭', '❌'],
+                                                                  message=base_message,
+                                                                  timeout=60)
+
+                if not reaction:
+                    break
+
+                limit = len(in_server.response_lib.responses) / field_limit
+                if int(limit) != limit:
+                    limit = int(limit + 1)
+
+                recent_page = current_page
+
+                choice = str(reaction.emoji)
+                if choice == '⏮':
+                    current_page = 1
+                elif choice == '⏪':
+                    current_page -= 1
+                    if current_page < 1:
+                        current_page = 1
+                elif choice == '⏩':
+                    current_page += 1
+                    if current_page > limit:
+                        current_page = limit
+                elif choice == '⏭':
+                    current_page = limit
+                elif choice == '❌':
+                    await self.bot.delete_message(base_message)
+                    break
+
+                if current_page != recent_page:
+                    em = get_page(current_page, in_server.response_lib.responses)
+                    base_message = await self.bot.edit_message(base_message, embed=em)
 
         @response.command(pass_context=True)
         async def help(ctx, arg: str = None):
