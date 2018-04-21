@@ -42,7 +42,10 @@ class Response:
         if self.is_num(self.spam_timer):
             self.spam_timer = int(self.spam_timer)
 
-        if self.search_type != 'explicit' and self.search_type != 'contains':
+        if self.search_type != 'explicit' and self.search_type != 'contains' and self.search_type != 'exact':
+            self.search_type = 'contains'
+
+        if ' ' in self.name and self.search_type != 'exact':
             self.search_type = 'contains'
 
         self.name = self.name.replace('+', ' ')
@@ -74,7 +77,7 @@ class Response:
         if self.is_num(self.spam_timer):
             self.spam_timer = int(self.spam_timer)
 
-        if self.search_type != 'explicit' and self.search_type != 'contains':
+        if self.search_type != 'explicit' and self.search_type != 'contains' and self.search_type != 'exact':
             self.search_type = 'contains'
 
         self.name = self.name.replace('+', ' ')
@@ -187,26 +190,35 @@ class ResponseLibrary:
         return query in self.response_ids
 
     # use to reduce search time for keyword membership in message
-    def get_occurrence(self, msg: discord.Message):
+    def get_occurrence(self, text: str):
         for r in self.responses:  # type: Response
             if not r.is_command and r.search_type == 'contains':
                 if r.id:
-                    if r.id in msg.content:
+                    if r.id in text:
                         print('found ' + r.id)
                         return r
-                if r.name in msg.content:
+                if r.name in text:
                     print('found ' + r.name)
                     return r
         return None
 
-    def get_explicit(self, msg: discord.Message):
-        pieces = msg.content.split(' ')
+    def get_explicit(self, text: str):
+        pieces = text.split(' ')
         for word in pieces:
             r = self.get(word)
             if r:
                 if r.search_type == 'explicit' and not r.is_command:
                     return r
         return None
+
+    def get_exact(self, content: str):
+        if len(content) > 30:
+            return None
+        r = self.get(content)
+        if r:
+            if r.search_type == 'exact':
+                return r
+            return None
 
     def get_processed(self,
                       response: Response,
@@ -240,12 +252,20 @@ class ResponseLibrary:
                 base = random.choice(base.split(' @r '))
             if base.find(' @m ') != -1:
                 return base.replace(' @m ', '\n')
-            em = discord.Embed()
-            em.set_image(url=base)
+            em = discord.Embed(color=random.randint(0, 0xffffff))
+            em.set_image(url=base.replace(' ', '').replace('%22', ''))
             return em
 
         # interpret in-line arguments
         text = self.interpret_response(response.content, msg, args)
+
+        # embed single images
+        if 'http' in text and text.endswith(('jpg', 'png', 'gif', 'jpglarge')):
+            text_parts = text.split('http')
+            url = 'http' + text_parts[1]
+            em = discord.Embed(title=chr(0x200B), description=text_parts[0], color=random.randint(0, 0xffffff))
+            em.set_image(url=url.replace(' ', '').replace('%22', ''))
+            return em
 
         if response.is_quote:
             author = None
@@ -266,13 +286,30 @@ class ResponseLibrary:
                 if r.timer > 0:
                     r.timer -= value
 
-    @staticmethod
-    def interpret_response(text: str, msg: discord.Message = None, args: list = None) -> str:
+    def interpret_response(self, text: str, msg: discord.Message = None, args: list = None) -> str:
         if '@ru' in text and args:
             text = text.replace('@u', '@a')
-            text = text.replace('@ru', '')
-        else:
-            text = text.replace('@ru', '')
+        text = text.replace('@ru', '')
+
+        if '@ra' in text and not args:
+            text = text.replace('@a ', '@u ')
+        text = text.replace('@ra', '')
+
+        use_name = False
+        if '@rn' in text:
+            use_name = True
+        text = text.replace('@rn', '')
+        print('found rn')
+
+        piece1 = None
+        if ' @and ' in text:
+            pieces = text.split(' @and ')
+            if use_name:
+                piece1 = self.interpret_response(text=pieces[0] + '@rn', msg=msg, args=args)
+            else:
+                piece1 = self.interpret_response(text=pieces[0].replace(' @and ', ''), msg=msg, args=args)
+            text = pieces[1]
+
         if text.find(' @r ') != -1:
             r_keys = text.split(' @r ')
             text = random.choice(r_keys)
@@ -280,21 +317,39 @@ class ResponseLibrary:
             if not msg:
                 raise ValueError('Must pass message to use @u')
 
-            text = text.replace('@u', msg.author.mention)
+            if not use_name:
+                text = text.replace('@u', msg.author.mention)
+            else:
+                text = text.replace('@u', '**{}**'.format(msg.author.display_name))
         if text.find('@a') != -1:
             if not args:
                 text = text.replace('@a', '')
             else:
                 index = 0
                 while '@a' in text:
-                    text = text.replace('@a', str(args[index]), 1)
+                    arg = str(args[index])
+
+                    if msg.mentions and use_name:
+                        msg_mentions = [x for x in msg.mentions if x.mention == arg]
+                        if msg_mentions:
+                            text = text.replace('@a', '**{}**'.format(msg_mentions[0].display_name), 1)
+                        else:
+                            text = text.replace('@a', str(arg), 1)
+                    else:
+                        text = text.replace('@a', str(arg), 1)
                     index += 1
                     if index >= len(args):
                         break
                 text = text.replace('@a', '')
         if text.find('```') == -1:
             text = text.replace('`', '')
-        return text
+        while '%d' in text:
+            text = text.replace('%d', str(random.randint(0, 9)), 1)
+        text = text.replace(' @m ', '\n')
+        if piece1:
+            return '{} {}'.format(piece1, text)
+        else:
+            return text
 
     # fixes albums by breaking down all selections and looking for empty strings
     # O(n) <- probably

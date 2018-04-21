@@ -11,21 +11,18 @@ import wikipedia
 import time
 import shlex
 from PIL import Image
+from pydub import AudioSegment
 from wikipedia import DisambiguationError
 from wikipedia import PageError
+
+import command_util
 from global_util import *
+import global_util
+from strawpoll import *
+from discordbot import DiscordBot
+from server import Server
+import storage_manager as storage
 
-
-num2word = {'0': 'zero',
-            '1': 'one',
-            '2': 'two',
-            '3': 'three',
-            '4': 'four',
-            '5': 'five',
-            '6': 'six',
-            '7': 'seven',
-            '8': 'eight',
-            '9': 'nine'}
 
 num2regional = {0: '0⃣',
                 1: '1⃣',
@@ -42,7 +39,7 @@ regional2num = {v: k for k, v in num2regional.items()}
 
 
 class Fun:
-    def __init__(self, bot: discord.ext.commands.Bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
 
         @self.bot.command(pass_context=True)
@@ -60,9 +57,9 @@ class Fun:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg is None:
@@ -84,7 +81,7 @@ class Fun:
 
             if arg == 'response' and msg is not None:
                 in_server.reee_message = msg
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('reee response now set to `{0}`'.format(in_server.reee_message))
 
         @self.bot.command(pass_context=True)
@@ -98,6 +95,11 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def bad(ctx, arg: str = None):
+
+            if ctx.message.author.id == '238038532369678336':
+                await self.bot.say(random.choice(['good cake', 'great cake', 'i love cake']))
+                return
+
             if arg is None:
                 await self.bot.say('no u')
             if arg == 'bot':
@@ -107,7 +109,7 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def playing(ctx, *, message: str):
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             if message == 'help':
@@ -119,10 +121,41 @@ class Fun:
                 return
 
             self.bot.playing_message = message
-            writeBotData(self.bot)
+            storage.write_bot_data(self.bot)
 
             await self.bot.change_presence(game=discord.Game(name=message, type=0))
             await self.bot.say('Changed `playing` status to `{0}`'.format(message))
+
+        @self.bot.command(pass_context=True)
+        async def presence(ctx, type: str, *, message: str):
+            if not self.bot.has_high_permissions(ctx.message.author):
+                return
+
+            if message == 'help':
+                await self.bot.send_message(ctx.message.author, '**Presence usage:**\n'
+                                                                '`{0}presence [type] [value]`\n'
+                                                                "Changes bot's presence, ie `playing`\n"
+                                                                '`type` can be `playing`, `streaming`, or `listening`\n'
+                                                                'Example: `{0}presence playing with carrots`'.format(
+                                                                    self.bot.command_prefix))
+                return
+
+            presence_types = {'playing': 0, 'game': 0, 'streaming': 1, 'listening': 2}
+            type = type.lower()
+
+            url = None
+
+            if 'url=' in message:
+                pieces = message.split(' ')
+                if 'url=' in pieces[-1]:
+                    url = pieces[-1].replace('url=','')
+                    message = ' '.join(pieces[:-1])
+
+            if type in presence_types:
+                await self.bot.change_presence(game=discord.Game(name=message, type=presence_types[type], url=url))
+                await self.bot.say('Changed `{}` presence to `{}`'.format(type, message))
+            else:
+                await self.bot.say('`{}` is not a valid presence type'.format(type))
 
         @self.bot.command(pass_context=True)
         async def b_ify(ctx, *, arg: str):
@@ -167,7 +200,6 @@ class Fun:
                                             "".format(self.bot.command_prefix))
                 return
 
-            global num2word
             is_raw = False
             if arg[:2] == '-r':
                 is_raw = True
@@ -180,7 +212,7 @@ class Fun:
                 elif c.isalpha():
                     out_str += ':regional_indicator_{}:'.format(c)
                 elif c.isnumeric():
-                    out_str += ':{}:'.format(num2word[c])
+                    out_str += ':{}:'.format(global_util.num2word[c])
                 elif c == '\n':
                     out_str += '\n'
                 elif c.isspace():
@@ -195,11 +227,11 @@ class Fun:
                 await self.bot.say(out_str)
 
         @self.bot.command(pass_context=True)
-        async def convert(ctx, new_format: str, dummy_link: str = None):
+        async def imageconvert(ctx, new_format: str, dummy_link: str = None):
 
             if new_format == 'help':
-                await self.bot.send_message(ctx.message.author, '**Convert help:**\n'
-                                                                '`{}convert [new filetype] (embed image)`\n'
+                await self.bot.send_message(ctx.message.author, '**Image Convert help:**\n'
+                                                                '`{}imgconvert [new filetype] (embed image)`\n'
                                                                 'Converts an image to requested filetype.'
                                                                 ''.format(self.bot.command_prefix))
                 return
@@ -243,6 +275,72 @@ class Fun:
                 await self.bot.say('Please embed an image')
 
         @self.bot.command(pass_context=True)
+        async def audioconvert(ctx, new_format: str, link: str = None):
+
+            if new_format == 'help':
+                await self.bot.send_message(ctx.message.author, '**Audio Convert help:**\n'
+                                                                '`{}audioconvert [new filetype] [link]`\n'
+                                                                'Converts an audio file to requested filetype.'
+                                                                ''.format(self.bot.command_prefix))
+                return
+
+            if ctx.message.attachments or link:
+                download_link = None
+                if link and link.find('http') == 0:
+                    download_link = link
+                else:
+                    try:
+                        download_link = ctx.message.attachments[0]
+                    except Exception:
+                        pass
+
+                if not download_link:
+                    await self.bot.say('Please attach an audio file.')
+                    return
+
+                save_path = None
+
+                try:
+                    with aiohttp.ClientSession() as session:
+                        async with session.get(link) as resp:
+                            if resp.status == 200:
+                                file_bytes = await resp.read()
+                                old_ext = '.mp3'
+                                try:
+                                    file_name = resp.headers['Content-Disposition'].split('filename=')[1]
+                                    file_pieces = file_name.rsplit('.', 1)
+                                    file_name = file_pieces[0]
+                                    old_ext = file_pieces[1]
+                                except Exception:
+                                    file_name = 'converted'
+
+                                save_path = '{}.{}'.format(file_name, old_ext)
+
+                                with open(save_path, 'wb') as audio:
+                                    audio.write(file_bytes)
+                                    audio.close()
+
+                                try:
+                                    song = AudioSegment.from_file(save_path, old_ext)
+                                except Exception:
+                                    await self.bot.say('Invalid file type.')
+                                    raise
+
+                                save_path = '{}.{}'.format(file_name, new_format)
+
+                                song.export(save_path, format=new_format)
+
+                                await self.bot.send_file(ctx.message.channel, save_path)
+                                os.remove(save_path)
+                except Exception as e:
+                    print('Image conversion failed at: ' + str(e))
+                    await self.bot.say('Error in conversion.')
+                    try:
+                        os.remove(save_path)
+                    except Exception:
+                        pass
+
+        @self.bot.command(pass_context=True)
         async def wiki(ctx, *, title: str):
             sent = await self.bot.say(':mag_right: :regional_indicator_w: Searching Wikipedia for `{0}`'.format(title))
             thing = functools.partial(self.get_wiki_page, title)
@@ -272,17 +370,22 @@ class Fun:
             await self.bot.send_message(ctx.message.channel, embed=embed)
 
         @self.bot.command(pass_context=True)
-        async def joined(ctx, member: discord.Member = None):
+        async def joined(ctx, member: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
+
+            if member:
+                member = command_util.find_arg(ctx, member, ['member'])
+                if type(member) is not discord.Member:
+                    member = await command_util.find_member(ctx, member, percent=50)
 
             if not member:
                 member = ctx.message.author
 
             e = discord.Embed(description="{0} joined {1} on {2}".format(member.display_name,
                                                                          ctx.message.server.name,
-                                                                         member.joined_at.strftime("%Y-%m-%d at "
+                                                                         member.joined_at.strftime("%B %-d, %Y at "
                                                                                                    "%H:%M:%S")),
                               color=0x00d114)
             e.set_author(name=member.name, icon_url=member.avatar_url)
@@ -290,22 +393,31 @@ class Fun:
             await self.bot.say(embed=e)
 
         @self.bot.command(pass_context=True)
-        async def userinfo(ctx, member: discord.Member = None):
+        async def userinfo(ctx, member: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
+
+            if member:
+                member = command_util.find_arg(ctx, member, ['member'])
+                if type(member) is not discord.Member:
+                    member = await command_util.find_member(ctx, member, percent=50)
 
             if not member:
                 member = ctx.message.author
 
             e = discord.Embed(title='════╣User Info╠════\n{}'.format(CHAR_ZWS), color=member.colour)
             e.set_author(name=member.name, icon_url=member.avatar_url)
+            e.set_thumbnail(url=member.avatar_url)
 
             if member == ctx.message.server.owner:
                 e.add_field(name='Owns this server.', value=CHAR_ZWS, inline=False)
 
+            if member.bot:
+                e.add_field(name='This user is a bot. (unlike me)', value=CHAR_ZWS, inline=False)
+
             e.add_field(name='Joined __{}__'.format(ctx.message.server.name),
-                        value=member.joined_at.strftime('%d-%m-%Y at %H:%M:%S'),
+                        value=member.joined_at.strftime('%B %-d, %Y at %H:%M:%S'),
                         inline=False)
 
             e.add_field(name='ID', value=member.id, inline=False)
@@ -329,13 +441,13 @@ class Fun:
             else:
                 e.add_field(name='Nickname', value='N/A', inline=False)
 
-            e.add_field(name='Created', value=member.created_at.strftime('%Y-%m-%d at %H:%M:%S'), inline=False)
+            e.add_field(name='Created', value=member.created_at.strftime('%B %-d, %Y at %H:%M:%S'), inline=False)
 
             await self.bot.say(embed=e)
 
         @self.bot.command(pass_context=True)
         async def ytdl(ctx, link: str):
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             if link == 'help':
@@ -413,12 +525,13 @@ class Fun:
                 favor = None
                 extra = None
                 if mods:
-                    if 'adv' in mods:
+                    if 'adv' in mods and 'dis' not in mods:
                         favor = 'adv'
                         mods = mods.replace('adv','')
                     elif 'dis' in mods:
                         favor = 'dis'
                         mods = mods.replace('dis','')
+                    mods = mods.replace('adv', '')
 
                     if '+' in mods:
                         extra = mods[mods.find('+'):]
@@ -429,22 +542,26 @@ class Fun:
                 iterations = self.is_num(dice[0])
                 sides = self.is_num(dice[1])
 
-                if not iterations:
+                if not iterations or type(iterations) is not int:
                     iterations = 1
 
-                if iterations:
-                    if iterations < 1:
-                        iterations = 1
+                if iterations < 1:
+                    iterations = 1
 
                 if favor:
                     iterations = 2
 
-                if not sides:
+                if not sides or type(sides) is not int:
                     sides = 1
 
-                if sides:
-                    if sides < 1:
-                        sides = 1
+                if sides < 1:
+                    sides = 1
+
+                if sides > 0xffffffff:
+                    sides = 0xffffffff
+
+                if ((len(str(sides)) + 3) * iterations) > 1024:
+                    iterations = int(1024 / (len(str(sides)) + 3)) - 2
 
                 for i in range(0, iterations):
                     roll_out.append(random.randint(1,sides))
@@ -575,7 +692,7 @@ class Fun:
         async def cat(ctx, num: int = None):
             async def get_page() -> dict:
                 with aiohttp.ClientSession() as session:
-                    async with session.get('http://random.cat/meow') as resp:
+                    async with session.get('http://aws.random.cat/meow') as resp:
                         if resp.status == 200:
                             d = await resp.json()
                             return d
@@ -623,7 +740,9 @@ class Fun:
                             d = await resp.json()
                             return d
 
-            if self.is_num(num):
+            if not num:
+                num = 1
+            elif self.is_num(num):
                 num = int(num)
                 if num > 1000:
                     await self.bot.say('https://corgiorgy.com/')
@@ -631,9 +750,6 @@ class Fun:
             elif num == '∞':
                 await self.bot.say('https://corgiorgy.com/')
                 return
-
-            if not num:
-                num = 1
 
             if num < 1:
                 num = 1
@@ -719,12 +835,12 @@ class Fun:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(ctx.message.server.id)
 
             if in_server.name != 'Shoe0nHead':
                 return
 
-            is_admin = checkAdmin(ctx.message.author.id)
+            is_admin = self.bot.check_admin(ctx.message.author)
 
             if not arg:
                 if not in_server.late:
@@ -753,6 +869,14 @@ class Fun:
             elif arg == 'set' and to_set and is_admin:
                 in_server.late = time.time() - (to_set * 60)
                 await self.bot.say('Late timer set to {}.'.format(to_set))
+
+        @self.bot.command(pass_context=True)
+        async def reactd(ctx, type: str, arg1: str = '', arg2: str = '', *, text: str = ''):
+            await asyncio.sleep(0.2)
+            await self.bot.delete_message(ctx.message)
+            if is_num(type) is not None:
+                type = str(int(type) - 1)
+            await react.callback(ctx, type=type, arg1=arg1, arg2=arg2, text=text)
 
         @self.bot.command(pass_context=True)
         async def react(ctx, type: str, arg1: str = '', arg2: str = '', *, text: str = ''):
@@ -784,27 +908,54 @@ class Fun:
                         if m_index < 0:
                             m_index = 0
                     target_message = usr_messages[m_index]
-            elif type == 'recent':
-                if self.is_num(arg1):
+            elif type == 'recent' or (is_num(type) is not None):
+                if self.is_num(type) is not None:
+                    message_num = int(type)
+                    text = '{} {} {}'.format(arg1, arg2, text)
+
+                elif self.is_num(arg1):
                     message_num = int(arg1)
-                    if message_num < 1:
-                        message_num = 1
-                    m_on = 0
-                    async for m in self.bot.logs_from(ctx.message.channel, limit=int(message_num + 1)):
-                        if m_on == message_num:
-                            target_message = m
-                            break
-                        m_on += 1
                     text = arg2 + ' ' + text
+                else:
+                    return
+                if message_num < 1:
+                    message_num = 1
+                m_on = 0
+                async for m in self.bot.logs_from(ctx.message.channel, limit=int(message_num + 1)):
+                    if m_on == message_num:
+                        target_message = m
+                        break
+                    m_on += 1
 
             if not target_message:
                 logs = self.bot.logs_from(ctx.message.channel, limit=2)
                 target_message = logs[1]
 
             used_emotes = []
-            failures = []
+            failures = []  # for troubleshooting
 
-            for c in text.lower():
+            lower = text.lower()
+            skip = False  # for skipping loops when pairs are present
+
+            for i, c in enumerate(lower):
+                if skip:
+                    skip = False
+                    continue
+
+                pair = lower[i:i+2]  # check for letter pairs first
+
+                if len(pair) == 2:
+                    if pair in emoji_alphabet:
+                        e = emoji_alphabet[pair][0]
+                        if e not in used_emotes:
+                            try:
+                                await self.bot.add_reaction(target_message, e)
+                            except Exception as e:
+                                failures.append(e)
+                            used_emotes.append(e)
+                            skip = True
+                            continue
+
                 if c in emoji_alphabet:
                     for e in emoji_alphabet[c]:
                         if e not in used_emotes:
@@ -831,6 +982,9 @@ class Fun:
                                    "`{0}timein London`"
                                    "".format(self.bot.command_prefix))
                 return
+
+            if arg in ['only time', 'time zone', 'time']:
+                arg = 'Montana'
 
             location = await worldtime.get_location(query=arg)
 
@@ -863,12 +1017,19 @@ class Fun:
         async def poll(ctx, *, args: str):
             in_args = self.strip_args(args)
             options = []
+            name = 'Poll'
             for a, o in in_args:
                 if a == 'option':
                     options.append(o)
+                elif a == 'name':
+                    name += ' - {}'.format(o)
 
             while len(options) > 9:
                 options.pop()
+
+            if len(options) < 1:
+                await self.bot.say('Please add at least 1 option.')
+                return
 
             scores = {}
             for i, o in enumerate(options):
@@ -876,7 +1037,7 @@ class Fun:
 
             def get_poll(scores: dict, options: list):
                 em = discord.Embed(title='───────────────────────', color=random.randint(0, 0xffffff))
-                em.set_author(name='Poll', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4ca.png')
+                em.set_author(name=name, icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4ca.png')
 
                 poll_bar = '🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲🔲'
 
@@ -922,6 +1083,275 @@ class Fun:
                 if len(has_voted) > current_voted:
                     em = get_poll(scores, options)
                     await self.bot.edit_message(base_message, embed=em)
+
+        @self.bot.command(pass_context=True)
+        async def strawpoll(ctx, *, args: str):
+
+            straw_poll = None
+
+            if 'option=' not in args:
+                in_args = shlex.split(args, ' ')
+                if len(in_args) > 2:
+                    straw_poll = StrawPoll(title=in_args[0], options=in_args[1:])
+            else:
+                in_args = self.strip_args(args)
+                input_options = {'title': 'no title', 'options': []}
+                for k, v in in_args:
+                    if k == 'option':
+                        input_options['options'].append(v)
+                    else:
+                        input_options[k] = v
+
+                if len(input_options['options']) < 2:
+                    input_options['options'].append('no')
+
+                if len(input_options['options']) < 2:
+                    input_options['options'].append('u')
+
+                straw_poll = StrawPoll(**input_options)
+
+            if not straw_poll:
+                await self.bot.send_message(ctx.message.channel, 'Error in data input')
+                return
+
+            success = await straw_poll.create()
+
+            if success:
+                await self.bot.send_message(ctx.message.channel, 'http://www.strawpoll.me/{}'.format(success['id']))
+            else:
+                await self.bot.send_message(ctx.message.channel, 'Straw Poll could not be created ¯\_(ツ)_/¯')
+
+        @self.bot.command(pass_context=True)
+        async def straya(ctx, *, text: str):
+            out = ""
+
+            def yeahnah():
+                return random.choice(['yeah', 'nah'])
+
+            for w in text.split(' '):
+                if w == 'yes':
+                    out += " nah yeah"
+                elif w == 'no':
+                    out += " yeah nah"
+                elif w == 'yeah':
+                    out += 'yeah yeah'
+                elif w == 'nah':
+                    out += 'nah nah'
+                else:
+                    if random.choice([True, False]):
+                        out += " {}".format(yeahnah())
+                    else:
+                        out += " {} {}".format(yeahnah(), yeahnah())
+
+            await self.bot.send_message(ctx.message.channel, out)
+
+        @self.bot.group(pass_context=True)
+        async def ishihara(ctx):
+            pass
+
+        @ishihara.command(pass_context=True)
+        async def solve(ctx, link: str = None):
+            download_url = None
+            if link:
+                if link.startswith('http'):
+                    download_url = link
+            elif ctx.message.attachments:
+                try:
+                    download_url = ctx.message.attachments[0]['url']
+                except KeyError:
+                    pass
+
+            if not download_url and ctx.message.embeds:
+                try:
+                    download_url = ctx.message.embeds[0]['url']
+                except KeyError:
+                    pass
+
+            if not download_url:
+                await self.bot.say('Please embed and image or pass link as argument.')
+                return
+
+            replace_colors = [0xE5E5C8, 0xB5B1A6, 0xBDB88D, 0xA8A48E, 0x91978E, 0x949C9D, 0xE0DBA3,
+                              0xBBB964, 0xE5D67B]  # shades of green
+
+            base_image = None
+
+            with aiohttp.ClientSession() as session:
+                async with session.get(download_url) as resp:
+                    if resp.status == 200:
+                        try:
+                            image_bytes = await resp.read()
+                            base_image = Image.open(io.BytesIO(image_bytes))
+                            base_image = base_image.convert("RGBA")
+                        except Exception as e:
+                            print('Error in ishihara at: {}'.format(e))
+                    else:
+                        await self.bot.say('Image invalid.')
+                        return
+
+            def replace_method(base_image):
+                for color in replace_colors:
+                    replace_color(base_image, color, 0x000000, 15)
+
+            if base_image:
+                try:
+                    await self.bot.loop.run_in_executor(def_executor, lambda: replace_method(base_image))
+
+                    base_image.save('solved.png', format='PNG')
+
+                    await self.bot.send_file(ctx.message.channel, 'solved.png')
+                except Exception:
+                    await self.bot.send_message(ctx.message.channel, 'Solve failed.')
+                    return
+            else:
+                await self.bot.send_message(ctx.message.channel, 'Image invalid.')
+                return
+
+            try:
+                os.remove('solved.png')
+            except Exception:
+                pass
+
+        @self.bot.command(pass_context=True)
+        async def hug(ctx, *, arg: str = None):
+            member_name = ''
+
+            member = command_util.find_arg(ctx, arg, ['member'])
+
+            if type(member) is str:
+                member = await command_util.find_member(ctx, member, percent=50)
+
+                if type(member) is discord.Member and arg:
+                    if arg.lower() in member.name.lower():
+                        member_name = member.name
+                    elif arg.lower() in member.display_name.lower():
+                        member_name = member.display_name
+
+                else:
+                    member_name = arg
+            else:
+                member_name = member.display_name
+
+            image = random.choice(global_util.hug_library)
+
+            single_options = ['**{}** gets a hug',
+                              'Here, **{}**, have a hug',
+                              '*Hugs* for **{}**']
+
+            duo_options = ['**{0}** gets a hug from **{1}**',
+                           '**{1}** hugs **{0}**',
+                           '**{1}** gives **{0}** a hug']
+
+            if arg:
+                desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
+            else:
+                desc = random.choice(single_options).format(ctx.message.author.name)
+
+            em = discord.Embed(title=CHAR_ZWS, description=desc, color=random.randint(0, 0xffffff))
+            em.set_image(url=image)
+
+            await self.bot.send_message(ctx.message.channel, embed=em)
+
+        @self.bot.command(pass_context=True)
+        async def pat(ctx, *, arg: str = None):
+
+            member_name = ''
+
+            member = command_util.find_arg(ctx, arg, ['member'])
+
+            if type(member) is str:
+                member = await command_util.find_member(ctx, member, percent=50)
+
+                if type(member) is discord.Member and arg:
+                    if arg.lower() in member.name.lower():
+                        member_name = member.name
+                    elif arg.lower() in member.display_name.lower():
+                        member_name = member.display_name
+
+                else:
+                    member_name = arg
+            else:
+                member_name = member.display_name
+
+            image = random.choice(global_util.pat_library)
+
+            single_options = ['**{}** gets a pat',
+                              'Here, **{}**, have a pat',
+                              '*Headpats* for **{}**']
+
+            duo_options = ['**{0}** gets a pat from **{1}**',
+                           '**{1}** pats **{0}**',
+                           '**{1}** gives **{0}** headpats']
+
+            if arg:
+                desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
+            else:
+                desc = random.choice(single_options).format(ctx.message.author.name)
+
+            em = discord.Embed(title=CHAR_ZWS, description=desc, color=random.randint(0, 0xffffff))
+            em.set_image(url=image)
+
+            await self.bot.send_message(ctx.message.channel, embed=em)
+
+        @self.bot.command(pass_context=True)
+        async def edithugs(ctx, arg: str, *, link: str):
+            if ctx.message.author.id != OWNER_ID:
+                return
+
+            if arg == 'add':
+                if ' @r ' in link:
+                    for url in link.split(' @r '):
+                        if url not in global_util.hug_library:
+                            global_util.hug_library.append(url)
+                else:
+                    global_util.hug_library.append(link)
+            elif arg.startswith('rem'):
+                global_util.hug_library.remove(link)
+            storage.write_hugs()
+
+            out = await self.bot.say('✅')
+            schedule_delete(self.bot, out, 5)
+
+        @self.bot.command(pass_context=True)
+        async def editpats(ctx, arg: str, *, link: str):
+            if ctx.message.author.id != OWNER_ID:
+                return
+
+            if arg == 'add':
+                if ' @r ' in link:
+                    for url in link.split(' @r '):
+                        if url not in global_util.pat_library:
+                            global_util.pat_library.append(url)
+                else:
+                    global_util.pat_library.append(link)
+            elif arg.startswith('rem'):
+                global_util.pat_library.remove(link)
+            storage.write_pats()
+
+            out = await self.bot.say('✅')
+            schedule_delete(self.bot, out, 5)
+
+        @self.bot.command(pass_context=True)
+        async def pick(ctx, *, arg: str):
+            choices = arg.split(' ')
+            if len(choices) == 1:
+                choices = arg.split(',')
+            if len(choices) > 10:
+                choices = choices[:10]
+
+            chosen = random.choice(choices)
+
+            await self.bot.say('I pick **{}**'.format(chosen))
+
+        @self.bot.command(pass_context=True)
+        async def eight_ball(ctx, *, arg: str):
+            choice_im = await olliebot_api.get_eight_ball()
+
+            em = discord.Embed(title=CHAR_ZWS, color=0x0000ff)
+            em.add_field(name='__{} asked:__'.format(ctx.message.author.display_name), value=arg, inline=False)
+            em.set_thumbnail(url=choice_im)
+
+            await self.bot.send_message(ctx.message.channel, embed=em)
 
     @staticmethod
     def is_num(text: str):
@@ -989,7 +1419,6 @@ class Fun:
                 pieces = a.split('=')
                 out_list.append((pieces[0], pieces[1]))
         return out_list
-
 
 
 def setup(bot):

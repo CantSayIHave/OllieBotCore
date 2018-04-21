@@ -2,7 +2,14 @@ import discord
 from discord.ext import commands
 import random
 import shlex
-from global_util import *
+import copy
+import paginator
+import global_util
+from containers import *
+from discordbot import DiscordBot
+from server import Server
+import storage_manager as storage
+from response import *
 
 
 arg_to_data = {'true': True,
@@ -31,138 +38,8 @@ correct_to_display = {v: a for a, v in display_to_correct.items()}
 
 
 class Responses:
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
-
-        @self.bot.group(pass_context=True)
-        async def quote(ctx):
-            if (ctx.invoked_subcommand is None) and ctx.message.server:  # random quote
-                in_server = get_server(ctx.message.server.id, self.bot)
-
-                if has_high_permissions(ctx.message.author, in_server):
-                    quote_set = random.choice(in_server.commands)
-                    if quote_set['author'] == 'none':
-                        await self.bot.say('"' + quote_set['text'].replace('@a', ctx.message.author.mention) + '"')
-                    else:
-                        await self.bot.say('"' + quote_set['text'].replace('@a', ctx.message.author.mention) + '" - ' +
-                                           quote_set['author'].replace('@a',
-                                                                       ctx.message.author.mention))  # "quote" - author
-                    return
-
-                # turn this on to enable .quote for normies
-                """
-                available_quotes = []  # load in available quotes
-                for c in in_server.commands:
-                    if int(c['timer']) < 1:
-                        available_quotes.append(c)
-                if available_quotes:
-                    quote_set = random.choice(available_quotes)
-                    if quote_set:
-                        quote_set['timer'] = str(in_server.command_delay * 60)
-                        if quote_set['author'] == 'none':
-                            await self.bot.say('"' + quote_set['text'].replace('@a', ctx.message.author.mention) + '"')
-                        else:
-                            await self.bot.say('"' + quote_set['text'].replace('@a', ctx.message.author.mention) + '" - ' +
-                                               quote_set['author'].replace('@a', ctx.message.author.mention))  # "quote" - author
-                else:
-                    await self.bot.say('No quotes currently available')"""
-
-        @quote.command(pass_context=True)
-        async def add(ctx, name_in: str, quote_in: str, author_in: str = None):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = get_server(ctx.message.server.id, self.bot)
-
-            if not has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if in_server:
-                if self.bot.get_command(name_in):  # i forgot i did this but ver good job self
-                    await self.bot.say('Sorry, ' + name_in + ' is already a control command')
-                    return
-
-                if author_in:
-                    in_server.commands.append({'name': name_in,
-                                               'text': quote_in,
-                                               'timer': 0,
-                                               'author': author_in})
-                else:
-                    in_server.commands.append({'name': name_in,
-                                               'text': quote_in,
-                                               'timer': 0,
-                                               'author': 'none'})
-                writeBot(self.bot)
-                await self.bot.say('Added quote ' + name_in)
-
-        @quote.command(pass_context=True)
-        async def listall(ctx, arg: str = None):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = get_server(ctx.message.server.id, self.bot)
-
-            if not has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if in_server:
-                out_msg = 'Quote list:\n'
-                if arg == 'debug':
-                    for q in in_server.commands:
-                        out_msg += '`{0}{1} - timer at {2}`\n'.format(self.bot.command_prefix, q['name'], q['timer'])
-                else:
-                    for q in in_server.commands:
-                        out_msg += '`' + self.bot.command_prefix + q['name'] + '`\n'
-                await self.bot.say(out_msg)
-
-        @quote.command(pass_context=True)
-        async def remove(ctx, r_name: str):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = get_server(ctx.message.server.id, self.bot)
-
-            if not has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if in_server:
-                q = None
-                for c in in_server.commands:
-                    if c['name'] == r_name:
-                        q = c
-                if q:
-                    in_server.commands.remove(q)
-                    writeBot(self.bot)
-                    await self.bot.say('Removed quote "' + r_name + '"')
-                else:
-                    await self.bot.say('Quote "' + r_name + '" does not exist')
-
-        @quote.command(pass_context=True)
-        async def help(ctx):
-            out_str = "**Quote usage**:\n"
-
-            if has_high_permissions(ctx.message.author, b=self.bot):
-                out_str += "`{0}quote <add> [name] [quote]`\n" \
-                           "`{0}quote <add> [name] [quote] [author]`\n" \
-                           "`{0}quote <remove> [name]`\n" \
-                           "`{0}quote <list>`\n"
-
-            out_str += "`{0}[quote name]`\n" \
-                       "This is an archaic system that is soon to be replaced.\n"
-
-            if has_high_permissions(ctx.message.author, b=self.bot):
-                out_str += "Note: for `{0}add`/`{0}remove`, make sure 'name' contains no spaces " \
-                           "and put quotes around 'quote' if said quote contains spaces.\n" \
-                           'Note: if `[author]` is included, the quote will format as `"quote" - author`. Otherwise, ' \
-                           'default format is simply `"quote"`\n' \
-                           'Example: `{0}add greetings "Hi, I' + \
-                           "'m a bot" + '" OllieBot` is called by ' \
-                                        '`{0}greetings`'
-
-            await self.bot.send_message(ctx.message.author, out_str.format(self.bot.command_prefix))
 
         @self.bot.group(pass_context=True)
         async def response(ctx):
@@ -174,10 +51,12 @@ class Responses:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
+
+            name = name.lower()
 
             if name.find('"') == 0:
                 name = name + args[:args.find('"') + 1]
@@ -203,7 +82,7 @@ class Responses:
 
             r = in_server.response_lib.add(Response(**add_dict))
 
-            writeResponses(self.bot, in_server)
+            storage.write_responses(self.bot, in_server)
 
             if r.is_image:
                 await self.bot.say('Added image response {} to library ✅'.format(name))
@@ -219,10 +98,12 @@ class Responses:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
+
+            name = name.lower()
 
             if not in_server.response_lib.get(name, by_name=True):
                 await self.bot.say('`{0}` does not exist in the response library. Use `{1}response add` to add it.'
@@ -231,7 +112,7 @@ class Responses:
 
             attempt = in_server.response_lib.remove(name)
 
-            writeResponses(self.bot, in_server)
+            storage.write_responses(self.bot, in_server)
 
             if attempt:
                 await self.bot.say('Successfully removed response {} from the library!'.format(name))
@@ -239,15 +120,17 @@ class Responses:
                 await self.bot.say('Failed to remove response {} from the library.'.format(name))
 
         @response.command(pass_context=True)
-        async def edit(ctx, name: str, *, args: str):
+        async def edit(ctx, name: str, *, args: str = ""):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
+
+            name = name.lower()
 
             resp = in_server.response_lib.get(name, by_name=True)
             if not resp:
@@ -269,24 +152,95 @@ class Responses:
 
             r = in_server.response_lib.edit(resp, add_dict)
 
-            writeResponses(self.bot, in_server)
+            storage.write_responses(self.bot, in_server)
 
             new_options = self.get_display(r.__dict__)
 
-            em = discord.Embed(title='───────────────────────', color=0xf4e542)  # yellow
-            em.set_author(name='Response Edit', icon_url='https://abs.twimg.com/emoji/v2/72x72/270d.png')
-            em.add_field(name='name', value=new_options['name'])
-            em.add_field(name='id', value=new_options['id'])
-            em.add_field(name='image', value=new_options['image'])
-            em.add_field(name='high-perm', value=new_options['high-perm'])
-            em.add_field(name='keyword', value=new_options['keyword'])
-            em.add_field(name='spam-timer', value=new_options['spam-timer'])
-            em.add_field(name='quote', value=new_options['quote'])
-            em.add_field(name='author', value=new_options['author'])
-            em.add_field(name='search-type', value=new_options['search-type'])
-            em.add_field(name='delete', value=new_options['delete'])
-            em.add_field(name='content', value=new_options['content'])
+            em = self.build_embed(new_options, 0xf4e542, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
             await self.bot.say(embed=em)
+
+        @response.command(pass_context=True)
+        async def append(ctx, method: str, name: str, to_append: str):
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
+                return
+
+            name = name.lower()
+
+            resp = in_server.response_lib.get(name, by_name=True)
+            if not resp:
+                await self.bot.say('`{}` does not exist in the response library. Use `{}response add` to add it.'
+                                   ''.format(name, self.bot.command_prefix))
+                return
+
+            if 'before=true' in to_append.lower() and ' @and ' in resp.content:
+                to_append = to_append.replace('before=true', '')
+                halves = resp.content.split(' @and ')
+                resp.content = '{}{} @and {}'.format(halves[0], to_append, halves[1])
+            elif method == 'r':
+                to_append = to_append.replace('before=true', '')
+
+                suffixes = ['@ra', '@ru', '@rn']
+                present_suffixes = []
+                for s in suffixes:
+                    if s in resp.content:
+                        present_suffixes.append(s)
+                        resp.content = resp.content.replace(s, '')
+
+                resp.content += to_append
+
+                for s in present_suffixes:
+                    resp.content += s
+            else:
+                resp.content += to_append
+
+            storage.write_responses(self.bot, in_server)
+
+            options = self.get_display(resp.__dict__)
+
+            em = self.build_embed(options, 0xf4e542, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
+            await self.bot.say(embed=em)
+
+        @response.command(pass_context=True)
+        async def transfer(ctx, name: str, to_server_name: str):
+            if ctx.message.author.id != global_util.OWNER_ID:
+                return
+
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            name = name.lower()
+
+            resp = in_server.response_lib.get(name, by_name=True)
+            if not resp:
+                await self.bot.say('`{}` does not exist in the response library. Use `{}response add` to add it.'
+                                   ''.format(name, self.bot.command_prefix))
+                return
+
+            if not global_util.is_num(to_server_name):
+                to_server = self.bot.get_server(name=to_server_name)
+                if not to_server:
+                    await self.bot.say('This server does not exist!')
+                    return
+            else:
+                to_server = self.bot.get_server(id=to_server_name)
+
+            if to_server.response_lib.get(resp.name, by_name=True):
+                await self.bot.say('`{}` already exists in {}'.format(name, to_server.name))
+
+            to_server.response_lib.responses.append(copy.deepcopy(resp))
+
+            storage.write_responses(self.bot, to_server)
+
+            await self.bot.say('Sent response `{}` to server `{}`'.format(name, to_server.name))
 
         @response.command(pass_context=True)
         async def get(ctx, name: str):
@@ -294,10 +248,12 @@ class Responses:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
+
+            name = name.lower()
 
             resp = in_server.response_lib.get(name, by_name=True)
             if not resp:
@@ -307,39 +263,25 @@ class Responses:
 
             options = self.get_display(resp.__dict__)
 
-            em = discord.Embed(title='───────────────────────', color=0x41f45c)  # pink
-            em.set_author(name='Response', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
-            em.add_field(name='name', value=options['name'])
-            em.add_field(name='id', value=options['id'])
-            em.add_field(name='image', value=options['image'])
-            em.add_field(name='high-perm', value=options['high-perm'])
-            em.add_field(name='keyword', value=options['keyword'])
-            em.add_field(name='spam-timer', value=options['spam-timer'])
-            em.add_field(name='quote', value=options['quote'])
-            em.add_field(name='author', value=options['author'])
-            em.add_field(name='search-type', value=options['search-type'])
-            em.add_field(name='delete', value=options['delete'])
-            em.add_field(name='content', value=options['content'])
+            em = self.build_embed(options, 0x41f45c, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
             await self.bot.say(embed=em)
 
-        """
         @response.command(pass_context=True)
         async def listall(ctx):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            em = discord.Embed(title='───────────────────────', color=0xff00dc)  # pink
-            em.set_author(name='Response List', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png')
+            responses = in_server.response_lib.responses
 
-            if len(in_server.response_lib.responses) > 0:
-                index = 0
-                for r in in_server.response_lib.responses:  # type: Response
+            def list_responses():
+                nonlocal responses
+                for r in responses:  # type: Response
                     a_type = 'command'
                     r_type = 'text'
                     if r.is_image:
@@ -348,114 +290,24 @@ class Responses:
                         r_type = 'quote'
                     if not r.is_command:
                         a_type = 'keyword'
-                    em.add_field(name=r.name, value='{}, {}'.format(a_type, r_type), inline=False)
-                    index += 1
-                    if index >= 25:
-                        await self.bot.say(embed=em)
-                        em = discord.Embed(title='───────────────────────', color=0xff00dc)
-                        index = 0
+                    yield EmbedField(name=r.name, value='{}, {}'.format(a_type, r_type), inline=False)
 
-            await self.bot.say(embed=em)"""
-
-        @response.command(pass_context=True)
-        async def listall(ctx):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = get_server(ctx.message.server.id, self.bot)
-
-            if not has_high_permissions(ctx.message.author, in_server):
-                return
-
-            field_limit = 10
-
-            def get_page(page_num: int, responses: list):
-                limit = len(responses) / field_limit
-                if int(limit) != limit:
-                    limit = int(limit + 1)
-
-                limit = int(limit)
-
-                if page_num < 1:
-                    page_num = 1
-                if page_num > limit:
-                    page_num = limit
-
-                l_start = int(field_limit * (page_num - 1))
-                if len(responses) > (l_start + field_limit):
-                    page_list = responses[l_start:l_start + field_limit]
-                else:
-                    page_list = responses[l_start:len(responses)]
-
-                em = discord.Embed(title='───────────────────────', color=0xff00dc)  # pink
-                em.set_author(name='Response List - Page {}/{}'.format(int(page_num), int(limit)),
-                              icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png')
-
-                for r in page_list:  # type: Response
-                    a_type = 'command'
-                    r_type = 'text'
-                    if r.is_image:
-                        r_type = 'image'
-                    elif r.is_quote:
-                        r_type = 'quote'
-                    if not r.is_command:
-                        a_type = 'keyword'
-                    em.add_field(name=r.name, value='{}, {}'.format(a_type, r_type), inline=False)
-
-                return em
-
-            current_page = 1
-
-            em = get_page(current_page, in_server.response_lib.responses)
-
-            base_message = await self.bot.send_message(ctx.message.channel, embed=em)
-            await self.bot.add_reaction(base_message, '⏮')
-            await self.bot.add_reaction(base_message, '⏪')
-            await self.bot.add_reaction(base_message, '⏩')
-            await self.bot.add_reaction(base_message, '⏭')
-            await self.bot.add_reaction(base_message, '❌')
-            await self.bot.wait_for_reaction('❌', message=base_message)
-            while True:
-                reaction, user = await self.bot.wait_for_reaction(['⏮', '⏪', '⏩', '⏭', '❌'],
-                                                                  message=base_message,
-                                                                  timeout=60)
-
-                if not reaction:
-                    break
-
-                limit = len(in_server.response_lib.responses) / field_limit
-                if int(limit) != limit:
-                    limit = int(limit + 1)
-
-                recent_page = current_page
-
-                choice = str(reaction.emoji)
-                if choice == '⏮':
-                    current_page = 1
-                elif choice == '⏪':
-                    current_page -= 1
-                    if current_page < 1:
-                        current_page = 1
-                elif choice == '⏩':
-                    current_page += 1
-                    if current_page > limit:
-                        current_page = limit
-                elif choice == '⏭':
-                    current_page = limit
-                elif choice == '❌':
-                    await self.bot.delete_message(base_message)
-                    break
-
-                if current_page != recent_page:
-                    em = get_page(current_page, in_server.response_lib.responses)
-                    base_message = await self.bot.edit_message(base_message, embed=em)
+            await paginator.paginate(list_responses(),
+                                     title='Response List',
+                                     bot=self.bot,
+                                     destination=ctx.message.channel,
+                                     icon='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png',
+                                     color=0xff00dc)
 
         @response.command(pass_context=True)
         async def help(ctx, arg: str = None):
 
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
+
+            def help_form(text: str):
+                """Simply allows for formatting paragraphs without need for line continue characters"""
+                return text
 
             if arg == 'formatting':
                 out_msg = help_form("**Response Formatting:**\n"
@@ -557,7 +409,7 @@ class Responses:
 
             spam_timer_def = 1
             if ctx.message.server:
-                in_server = get_server(ctx.message.server.id, self.bot)
+                in_server = self.bot.get_server(server=ctx.message.server)
                 spam_timer_def = in_server.command_delay
 
             first_half = help_form("**Response help:**\n"
@@ -685,14 +537,31 @@ class Responses:
 
         return out_dict
 
+    @staticmethod
+    def build_embed(options: dict, color: int, icon: str) -> discord.Embed:
+        em = discord.Embed(title='───────────────────────', color=color)  # pink
+        em.set_author(name='Response', icon_url=icon)
+        em.add_field(name='name', value=options['name'])
+        em.add_field(name='id', value=options['id'])
+        em.add_field(name='image', value=options['image'])
+        em.add_field(name='high-perm', value=options['high-perm'])
+        em.add_field(name='keyword', value=options['keyword'])
+        em.add_field(name='spam-timer', value=options['spam-timer'])
+        em.add_field(name='quote', value=options['quote'])
+        em.add_field(name='author', value=options['author'])
+        em.add_field(name='search-type', value=options['search-type'])
+        em.add_field(name='delete', value=options['delete'])
+        em.add_field(name='content', value=options['content'])
+        return em
 
-async def execute_responses(msg: discord.Message, bot: commands.Bot, in_server: Server):
-    high_perm = has_high_permissions(msg.author, in_server)
-    if msg.content.find(bot.command_prefix) == 0:
-        command = msg.content.split(' ')[0].split(bot.command_prefix)[1].lower()
+
+async def execute_responses(msg: discord.Message, bot: commands.Bot, in_server: Server, content_lower: str):
+    high_perm = bot.has_high_permissions(msg.author, in_server)
+    if content_lower.find(bot.command_prefix) == 0:
+        command = content_lower.split(' ')[0].split(bot.command_prefix)[1].lower()
         if in_server.response_lib.has(command):  # commands
             com_response = in_server.response_lib.get(command)
-            args = msg.content.split(' ')[1:]
+            args = shlex.split(content_lower, ' ')[1:]
             resp_out = in_server.response_lib.get_processed(com_response,
                                                             msg=msg,
                                                             args=args,
@@ -706,10 +575,13 @@ async def execute_responses(msg: discord.Message, bot: commands.Bot, in_server: 
                     await bot.send_message(msg.channel, embed=resp_out)
                     return
 
-    first_occurrence = in_server.response_lib.get_occurrence(msg)  # keywords
+    first_occurrence = in_server.response_lib.get_exact(content_lower)  # exact
 
     if not first_occurrence:
-        first_occurrence = in_server.response_lib.get_explicit(msg)
+        first_occurrence = in_server.response_lib.get_occurrence(content_lower)  # keywords
+
+    if not first_occurrence:
+        first_occurrence = in_server.response_lib.get_explicit(content_lower)  # keyword - split()
 
     if first_occurrence:
         resp_out = in_server.response_lib.get_processed(first_occurrence,
@@ -721,12 +593,12 @@ async def execute_responses(msg: discord.Message, bot: commands.Bot, in_server: 
             if type(resp_out) is str:
                 m = await bot.send_message(msg.channel, resp_out)
                 if first_occurrence.delete:
-                    schedule_delete(bot, m, first_occurrence.delete)
+                    global_util.schedule_delete(bot, m, first_occurrence.delete)
                 return
             elif type(resp_out) is discord.Embed:
                 m = await bot.send_message(msg.channel, embed=resp_out)
                 if first_occurrence.delete:
-                    schedule_delete(bot, m, first_occurrence.delete)
+                    global_util.schedule_delete(bot, m, first_occurrence.delete)
                 return
 
 

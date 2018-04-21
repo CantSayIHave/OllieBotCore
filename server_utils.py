@@ -8,12 +8,14 @@ import aiohttp
 from PIL import Image
 from global_util import *
 from containers import *
-
+from discordbot import DiscordBot
+import storage_manager as storage
 
 # custom help dict to hold data on command accessibility
-help_args = {'clear': {'d': 'clear bot messages', 'm': True},
+help_args = {
+             'audioconvert': {'d': 'convert audio to different format', 'm': False},
+             'clear': {'d': 'clear bot messages', 'm': True},
              'cat': {'d': 'summon a cat', 'm': False},
-             'convert': {'d': 'convert image to different format', 'm': False},
              'b-ify': {'d': 'add some 🅱️ to text', 'm': False},
              'bigtext': {'d': 'transform text into regional indicators', 'm': False},
              'block': {'d': 'block any command from non-mods', 'm': True},
@@ -21,16 +23,18 @@ help_args = {'clear': {'d': 'clear bot messages', 'm': True},
              'emotes': {'d': 'suggest server emotes to the mods', 'm': False},
              'good': {'d': 'easy way to check if bot is online', 'm': True},
              'getraw': {'d': 'get raw text from a message', 'm': True},
+             'imageconvert': {'d': 'convert image to different format', 'm': False},
              'info': {'d': 'get bot info', 'm': False},
              'music': {'d': 'manage/play music from youtube', 'm': False},
              'perm': {'d': 'set user permissions', 'm': True},
+             'purge': {'d': 'mass-clear messages', 'm': True},
              'playing': {'d': "set bot's 'playing' message", 'm': True},
              'prefix': {'d': "set bot's command prefix", 'm': True},
              'quote': {'d': 'manage/call quotes', 'm': True},
              'react': {'d': 'react to a message with bigtext', 'm': False},
              'reee': {'d': 'manage autistic screaming response', 'm': True},
              'response': {'d': 'manage custom responses', 'm': True},
-             'role': {'d': 'automate mass roll assignments', 'm': True},
+             'roles': {'d': 'automate mass roll assignments', 'm': True},
              'roll': {'d': 'dice roller', 'm': False},
              'rss': {'d': 'manage rss feeds for each channel', 'm': True},
              'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
@@ -45,7 +49,7 @@ help_args = {'clear': {'d': 'clear bot messages', 'm': True},
 
 
 class ServerUtils:
-    def __init__(self, bot: discord.ext.commands.Bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
 
         @self.bot.command(pass_context=True)
@@ -71,14 +75,14 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg == 'message' and msg:
                 in_server.join_message = msg
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Set join message to `{}`'.format(in_server.join_message))
                 return
             elif arg == 'message' and not msg:
@@ -87,11 +91,11 @@ class ServerUtils:
 
             if arg == 'channel' and ctx.message.channel_mentions:
                 in_server.join_channel = ctx.message.channel_mentions[0].id
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Set join message channel to {}'.format(ctx.message.channel_mentions[0].mention))
             elif arg == 'channel' and not ctx.message.channel_mentions:
                 in_server.join_channel = ctx.message.channel.id
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Set join message channel to {}'.format(ctx.message.channel.mention))
 
         @self.bot.group(pass_context=True)
@@ -101,7 +105,7 @@ class ServerUtils:
 
         @perm.command(pass_context=True)
         async def admin(ctx, key: str):
-            global adminKey, admins
+            global adminKey
             if key == 'generate':
                 # await self.bot.say('Generating key...')
                 bytesKey = os.urandom(32)
@@ -110,26 +114,49 @@ class ServerUtils:
             else:
                 if key == adminKey:
                     member = ctx.message.author
-                    admins.append(member.id)
-                    writeAdmins(admins)
+                    self.bot.admins.append(member.id)
+                    storage.write_admins(self.bot.admins)
                     await self.bot.say('Added {0.mention} as an admin'.format(member))
                 else:
                     print('Failed admin attempt on ' + time.strftime('%a %D at %H:%M:%S'))
 
-        @perm.command(pass_context=True)
-        async def mod(ctx, member: discord.Member):
+        @perm.group(pass_context=True)
+        async def mod(ctx, arg: str):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            in_server.mods.append(member.id)
-            writeServerData(self.bot, in_server)
-            await self.bot.say('Added {} to the mod list'.format(member.mention))
+            if arg == 'listall':
+                em = discord.Embed(title='───────────────────────', color=0xf4f142)  # yellow
+                em.set_author(name='Mod List', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png')
+
+                mod_users = [x for x in ctx.message.server.members if x.id in in_server.mods]
+                for m in mod_users:
+                    em.add_field(name=m.name, value=CHAR_ZWS, inline=False)
+
+                await  self.bot.send_message(ctx.message.channel, embed=em)
+                return
+
+            id = extract_mention_id(arg)
+
+            match = [x for x in ctx.message.mentions if x.id == id]
+
+            if not match:
+                return
+
+            member = match[0]  # type: discord.Member
+
+            if member.id not in in_server.mods:
+                in_server.mods.append(member.id)
+                storage.write_server_data(self.bot, in_server)
+                await self.bot.say('Added {} to the mod list'.format(member.mention))
+            else:
+                await self.bot.say('{} is already a mod'.format(member.mention))
 
         @perm.command(pass_context=True)
         async def unmod(ctx, member: discord.Member):
@@ -137,14 +164,14 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             try:
                 in_server.mods.remove(member.id)
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Removed {} from the mod list'.format(member.mention))
             except Exception:
                 await self.bot.say('{} is not on the mod list'.format(member.mention))
@@ -155,18 +182,18 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg == 'admin':
-                if checkAdmin(member.id):
+                if self.bot.check_admin(member):
                     await self.bot.say('{} is an admin'.format(member.mention))
                 else:
                     await self.bot.say('{} is *not* an admin'.format(member.mention))
             elif arg == 'mod':
-                if in_server.is_mod(member.id):
+                if in_server.is_mod(member):
                     await self.bot.say('{} is a mod'.format(member.mention))
                 else:
                     await self.bot.say('{} is *not* a mod'.format(member.mention))
@@ -176,7 +203,8 @@ class ServerUtils:
             if arg == 'help':
                 await self.bot.send_message(ctx.message.author, '**Rolemod usage:**\n'
                                                                 '`{0}perm rolemod <add/remove> [@role]`\n'
-                                                                '`{0}perm rolemod <check> [@role]`'.format(
+                                                                '`{0}perm rolemod <check> [@role]`'
+                                                                '`{0}perm rolemod <list>`'.format(
                     self.bot.command_prefix))
                 return
 
@@ -184,20 +212,31 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
+                return
+
+            if arg == 'listall':
+                em = discord.Embed(title='───────────────────────', color=0xf4b541)  # yellow
+                em.set_author(name='RoleMod List', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png')
+
+                mod_roles = [x for x in ctx.message.server.roles if x.id in in_server.rolemods]
+                for rm in mod_roles:
+                    em.add_field(name=rm.name, value=CHAR_ZWS, inline=False)
+
+                await self.bot.send_message(ctx.message.channel, embed=em)
                 return
 
             if role:
                 if arg == 'add':
                     in_server.rolemods.append(role.id)
-                    writeServerData(self.bot, in_server)
+                    storage.write_server_data(self.bot, in_server)
                     await self.bot.say('Added role ' + role.mention + ' to role mod list')
                 elif arg == 'remove':
                     if role.id in in_server.rolemods:
                         in_server.rolemods.remove(role.id)
-                        writeServerData(self.bot, in_server)
+                        storage.write_server_data(self.bot, in_server)
                         await self.bot.say('Removed role ' + role.mention + ' from role mod list')
                     else:
                         await self.bot.say('Role ' + role.mention + ' is not on the role mod list')
@@ -209,7 +248,7 @@ class ServerUtils:
 
         @perm.command(pass_context=True)
         async def help(ctx):
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
                 return
 
             await self.bot.send_message(ctx.message.author,
@@ -227,9 +266,9 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if cmd == 'help':
@@ -254,17 +293,17 @@ class ServerUtils:
                     if arg < 0:
                         arg = 0
                     in_server.command_delay = arg
-                    writeBot(self.bot)  # Necessary to save command delay
+                    storage.write_bot(self.bot)  # Necessary to save command delay
                     await self.bot.say('Set anti-spam timer to ' + str(arg) + ' minutes')
 
                 elif cmd == 'add' and arg:
                     in_server.spam_timers[arg] = 0
-                    writeServerData(self.bot, in_server)
+                    storage.write_server_data(self.bot, in_server)
                     await self.bot.say('Added {} to spam timer list'.format(arg))
 
                 elif cmd == 'remove' and arg:
                     in_server.spam_timers.pop(arg, None)
-                    writeServerData(self.bot, in_server)
+                    storage.write_server_data(self.bot, in_server)
                     await self.bot.say('Removed {} from spam timer list'.format(arg))
 
                 elif cmd == 'listall':
@@ -279,9 +318,9 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg == 'help':
@@ -341,18 +380,17 @@ class ServerUtils:
 
             if arg == 'all' and arg2:
                 in_server.block_list.append(BlockItem(name=arg2, channel='all'))
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Added {} to the list of blocked commands for all channels.'.format(arg2))
             elif arg == 'here' and arg2:
                 in_server.block_list.append(BlockItem(name=arg2, channel=ctx.message.channel.id))
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Added {} to the list of blocked commands for {}.'.format(arg2,
                                                                                              ctx.message.channel.mention))
             elif channel_arg:
                 in_server.block_list.append(BlockItem(name=arg2, channel=channel_arg.id))
-                writeServerData(self.bot, in_server)
+                storage.write_server_data(self.bot, in_server)
                 await self.bot.say('Added {} to the list of blocked commands for {}.'.format(arg2, channel_arg.mention))
-
 
             if not arg2:
                 await self.bot.say('Please pass a name to block')
@@ -363,9 +401,9 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg == 'help':
@@ -392,19 +430,19 @@ class ServerUtils:
                 if cmd.name == arg2:
                     if arg == 'all' and cmd.channel == 'all':
                         in_server.block_list.remove(cmd)
-                        writeServerData(self.bot, in_server)
+                        storage.write_server_data(self.bot, in_server)
                         await self.bot.say('Removed {} from block list for all channels.'.format(arg2))
                         return
                     elif arg == 'here' and cmd.channel == ctx.message.channel.id:
                         in_server.block_list.remove(cmd)
-                        writeServerData(self.bot, in_server)
+                        storage.write_server_data(self.bot, in_server)
                         await self.bot.say('Removed {} from block list for {}.'.format(arg2,
                                                                                        ctx.message.channel.mention))
                         return
                     elif channel_arg:
                         if cmd.channel == channel_arg.id:
                             in_server.block_list.remove(cmd)
-                            writeServerData(self.bot, in_server)
+                            storage.write_server_data(self.bot, in_server)
                             await self.bot.say('Removed {} from block list for {}.'.format(arg2, channel_arg.mention))
                             return
 
@@ -418,8 +456,8 @@ class ServerUtils:
                 await self.bot.say('No block for name `{}` in {} exists.'.format(arg2, ctx.message.channel.mention))
 
         @self.bot.command(pass_context=True)
-        async def clear(ctx, number: str = '99'):
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+        async def clear(ctx, number: str = '99', channel: discord.Channel = None):
+            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
                 return
 
             if number == 'help':
@@ -427,6 +465,9 @@ class ServerUtils:
                                                                 'Clears a number of bot messages'.format(
                     self.bot.command_prefix))
                 return
+
+            if not channel:
+                channel = ctx.message.channel
 
             number = int(number)
 
@@ -444,45 +485,129 @@ class ServerUtils:
             await asyncio.sleep(1)
 
             mgs = []  # Empty list to put all the messages in the log
-            number = int(number)  # Converting the amount of messages to delete to an integer
             number += 1  # Delete whatever is required plus 'Deleting...'
 
-            async for x in self.bot.logs_from(ctx.message.channel, limit=100):
-                if x.author == self.bot.user:
-                    mgs.append(x)
-                if len(mgs) >= number:
-                    break
-            while len(mgs) < number:
-                async for x in self.bot.logs_from(ctx.message.channel, limit=100, after=mgs[len(mgs) - 1]):
-                    if x.author == self.bot.user:
-                        mgs.append(x)
+            limit = min(number, 99)
 
-            if isinstance(ctx.message.channel, discord.PrivateChannel):
-                for m in mgs:
-                    await self.bot.delete_message(m)
+            i = 0
+
+            now = datetime.now()
+
+            def user_check(msg):
+                nonlocal limit, i
+
+                message_age = (now - msg.timestamp).total_seconds()
+
+                if message_age >= 1209600:
+                    i = limit
+
+                if i >= limit:
+                    return False
+                if msg.author == self.bot.user:
+                    i += 1
+                    return True
+                return False
+
+            async def bootleg_purge():
+                async for x in self.bot.logs_from(channel, limit=99):
+                    if user_check(x):
+                        await self.bot.delete_message(x)
+
+            if isinstance(channel, discord.PrivateChannel):
+                await bootleg_purge()
             else:
-                await self.bot.delete_messages(mgs)
+                await self.bot.purge_from(ctx.message.channel, limit=100, check=user_check)
 
+        @self.bot.command(pass_context=True)
+        async def purge(ctx, arg: str, arg2: str = None):
+            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
+                return
+
+            if arg == 'help':
+                await self.bot.send_message(ctx.message.author, '**Purge usage**:\n'
+                                                                '`{0}purge [message number]`\n'
+                                                                '`{0}purge [member] [message number:optional]`\n'
+                                                                'Clears a number of messages. If `member` is not \n'
+                                                                'passed, clearing is indiscriminate'.format(
+                                                                    self.bot.command_prefix))
+                return
+
+            elif ctx.message.server:
+                number = is_num(arg)
+                if not number:
+                    if not ctx.message.mentions:
+                        m = await self.bot.say('Please pass a member or a number as first argument.')
+                        schedule_delete(self.bot, m, 5)
+                        return
+
+                    member = ctx.message.mentions[0]
+
+                    number = is_num(arg2)
+                    if not number:
+                        number = 99
+                else:
+                    member = None
+            else:
+                await self.bot.say('This command may only be called from a server.')
+                return
+
+            if number < 1:
+                number = 1
+
+            if number > 99:
+                number = 99
+
+            purged = 0
+
+            def check(msg):
+                nonlocal purged
+
+                if purged >= number:
+                    return False
+
+                if msg.author == member:
+                    purged += 1
+                    return True
+                else:
+                    return False
+
+            def count(msg):
+                nonlocal purged
+                purged += 1
+                return True
+
+            try:
+                if member:
+                    await self.bot.purge_from(ctx.message.channel, check=check)
+                    await self.bot.say('Removed **{}** messages by {}'.format(purged, member.name))
+                else:
+                    await self.bot.purge_from(ctx.message.channel, limit=number, check=count)
+                    await self.bot.say('Removed **{}** messages'.format(purged))
+            except discord.Forbidden:
+                await self.bot.say('I do not have permissions to do this.')
+            except discord.HTTPException:
+                await self.bot.say('Error in purge. Try again?')
 
         @self.bot.command(pass_context=True)
         async def info(ctx):
             e = discord.Embed(title="**Bot Info**",
-                              description="{0} is a bot operated by the **OllieBot Core** network, a Python script "
-                                          "developed by <@{1}> and powered by "
+                              description="{} is a bot operated by the **OllieBot Core** network, a platform "
+                                          "developed by <@{}> and powered by "
                                           "[discord.py](https://github.com/Rapptz/discord.py), a Python API wrapper "
                                           "for Discord.\n\n"
-                                          "Feel free to PM me (CantSayIHave) for suggestions and bug reports.\n\n"
-                                          "Webpage coming soon.".format(self.bot.user.name, "305407800778162178"),
+                                          "Feel free to PM me (CantSayIHave#6969) for suggestions and bug reports.\n\n"
+                                          "Webpage: www.olliebot.cc".format(self.bot.user.name, OWNER_ID),
                               color=0xff9000)
             await self.bot.send_message(ctx.message.author,
                                         embed=e)
 
+        """
         @self.bot.command(pass_context=True)
         async def help(ctx):
             global help_args
 
             field_limit = 10
-            high_perm = has_high_permissions(ctx.message.author, b=self.bot)
+            high_perm = self.bot.has_high_permissions(ctx.message.author, b=self.bot)
 
             def get_page(page_num: int, args: list):
                 limit = len(args) / field_limit
@@ -587,7 +712,7 @@ class ServerUtils:
                                  value=out_str.format(self.bot.command_prefix),
                                  inline=False)
 
-                    await self.bot.edit_message(base_message, embed=em)
+                    await self.bot.edit_message(base_message, embed=em)"""
 
         @self.bot.group(pass_context=True)
         async def emotes(ctx):
@@ -599,7 +724,7 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
             if link is not None:
                 if link[:4] != 'http':
@@ -629,12 +754,12 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            if link is not None:
+            if link is not None and link != '-r':
                 if link[:4] != 'http':
                     await self.bot.say('Sorry, but that is not a valid link. Please provide form '
                                        '`http(s):\\\\...`')
@@ -682,6 +807,10 @@ class ServerUtils:
 
                                     image = Image.open(io.BytesIO(image_bytes))
                                     image = image.convert('RGBA')
+
+                                    if link == '-r':
+                                        self.replace_color(image, 0x36393E, 5)
+
                                     new_type = io.BytesIO()
                                     image.save(new_type, 'PNG')
                                     new_bytes = new_type.getvalue()
@@ -701,7 +830,8 @@ class ServerUtils:
                                     return
                     except Exception:
                         pass
-                        await self.bot.say('No image detected in message. Please upload image as part of command message')
+                        await self.bot.say(
+                            'No image detected in message. Please upload image as part of command message')
 
         @emotes.command(pass_context=True)
         async def listall(ctx):
@@ -709,9 +839,9 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if len(in_server.suggest_emotes) == 0:
@@ -729,23 +859,23 @@ class ServerUtils:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             in_server.suggest_emotes.clear()
             await self.bot.say('Emote suggestions cleared')
 
         @emotes.command(pass_context=True)
-        async def steal(ctx, arg: str, new_name: str = None):
+        async def steal(ctx, arg: str, new_name: str = None, location: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if arg[0] == '<':
@@ -764,19 +894,24 @@ class ServerUtils:
                 if not new_name:
                     new_name = emote_uni
 
+            add_server = ctx.message.server
+
+            if location == 'mine':
+                add_server = discord.Server(id='338507735358242816', name='Bot Test')
+
             with aiohttp.ClientSession() as session:
                 async with session.get(add_url) as resp:
                     if resp.status == 200:
                         image_bytes = await resp.read()
 
-                        await self.bot.create_custom_emoji(ctx.message.server, name=new_name,
+                        await self.bot.create_custom_emoji(add_server, name=new_name,
                                                            image=image_bytes)
                         await self.bot.say('Stole `:{}:` for the server!'.format(new_name))
 
         @emotes.command(pass_context=True)
         async def help(ctx):
             out_str = "**Emotes usage:**\n"
-            if has_high_permissions(ctx.message.author, b=self.bot):
+            if self.bot.has_high_permissions(ctx.message.author, b=self.bot):
                 out_str += '`{0}emotes <suggest> [link]`\n' \
                            '`{0}emotes <suggest> (upload image in message)`\n' \
                            '`{0}emotes <add> <name> [link]`\n' \
@@ -803,18 +938,18 @@ class ServerUtils:
             await self.bot.send_message(ctx.message.author, out_str)
 
         @self.bot.group(pass_context=True)
-        async def role(ctx):
+        async def roles(ctx):
             pass
 
-        @role.command(pass_context=True)
+        @roles.command(pass_context=True)
         async def add(ctx, base_role: discord.Role, add_role: discord.Role, no_role: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             try:
@@ -838,15 +973,15 @@ class ServerUtils:
             except discord.HTTPException:
                 await self.bot.say('Add failed, roles could not be added for some reason ¯\_(ツ)_/¯')
 
-        @role.command(pass_context=True)
+        @roles.command(pass_context=True)
         async def remove(ctx, base_role: discord.Role, rem_role: discord.Role, no_role: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             try:
@@ -865,20 +1000,21 @@ class ServerUtils:
                                                                                             base_role.mention))
             except discord.Forbidden:
                 await self.bot.say(
-                    'Remove failed. Bot does not have sufficient permissions to remove {} from {}'.format(rem_role.mention,
-                                                                                                          base_role.mention))
+                    'Remove failed. Bot does not have sufficient permissions to remove {} from {}'.format(
+                        rem_role.mention,
+                        base_role.mention))
             except discord.HTTPException:
                 await self.bot.say('Remove failed, role could not be removed for some reason ¯\_(ツ)_/¯')
 
-        @role.command(pass_context=True)
+        @roles.command(pass_context=True)
         async def replace(ctx, base_role: discord.Role, rep_role: discord.Role):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             try:
@@ -898,15 +1034,84 @@ class ServerUtils:
             except discord.HTTPException:
                 await self.bot.say('Replace failed, role could not be replaced for some reason ¯\_(ツ)_/¯')
 
-        @role.command(pass_context=True)
+        @roles.command(pass_context=True)
+        async def create(ctx, name: str, color: str = '0xffffff'):
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
+                return
+
+            try:
+                color = int(color, 16)
+            except Exception:
+                color = 0xffffff
+
+            try:
+                r = await self.bot.create_role(server=ctx.message.server, name=name,
+                                               color=discord.Color(color),
+                                               mentionable=True)
+                await self.bot.say('Created role {}!'.format(r.mention))
+            except discord.Forbidden:
+                await self.bot.say("I don't have permission to do this.")
+            except discord.HTTPException:
+                await self.bot.say("Error in creating role :(")
+
+        @roles.command(pass_context=True)
+        async def edit(ctx, name: str, *, options: str):
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
+                return
+
+            role = [x for x in ctx.message.server.roles if x.name == name]
+
+            if not role:
+                await self.bot.say('Role `{}` does not exist'.format(name))
+                return
+
+            options_d = {}
+
+            for o in shlex.split(options, comments=False, posix=' '):
+                if o:
+                    parts = o.split('=')
+                    options_d[parts[0].lower()] = parts[1]
+
+            if 'color' in options_d:
+                options_d['color'] = options_d['color'].replace('#', '0x')
+                try:
+                    color = int(options_d['color'], 16)
+                except Exception:
+                    color = 0xffffff
+                options_d['color'] = discord.Color(color)
+
+            try:
+                r = await self.bot.edit_role(server=ctx.message.server, role=role[0], **options_d)
+                await self.bot.say('Updated role `{}`'.format(name))
+            except discord.Forbidden:
+                await self.bot.say('I do not have permissions for this.')
+            except Exception:
+                await self.bot.say('Error in formatting')
+
+
+        @roles.command(pass_context=True)
         async def help(ctx):
             await self.bot.send_message(ctx.message.author,
-                                        '**Role usage:**\n'
-                                        '`{0}role <add/remove> [base role] [new role] [optional:"NoRole"]`\n'
-                                        '`{0}role <replace> [old role] [new role]`\n'
-                                        'The role command automates mass addition, removal and replacement of roles. '
+                                        '**Roles usage:**\n'
+                                        '`{0}roles <add/remove> [base role] [new role] [optional:"NoRole"]`\n'
+                                        '`{0}roles <replace> [old role] [new role]`\n'
+                                        '`{0}roles <create> [name] [color]`\n'
+                                        'The roles command automates mass addition, removal and replacement of roles, '
+                                        'as well as creation for custom colors.'
                                         'Example:\n'
-                                        '`{0}role add @SomeRole @OtherRole` will add `@OtherRole` to all users with '
+                                        '`{0}roles add @SomeRole @OtherRole` will add `@OtherRole` to all users with '
                                         'role `@SomeRole`\n'
                                         'If the third argument "NoRole" is passed to `add/remove`, the second role '
                                         'will be added to/removed from only users with no role\n'
@@ -927,13 +1132,30 @@ class ServerUtils:
                                                                 ''.format(self.bot.command_prefix))
                 return
 
+            if not is_num(arg):
+                return
+
             try:
+                msg = None
                 if arg2:
                     msg = await self.bot.get_message(self.bot.get_channel(arg), arg2)
-                    await self.bot.say('```\n{}\n```'.format(msg.content))
                 else:
-                    msg = await self.bot.get_message(ctx.message.channel, arg)
-                    await self.bot.say('```\n{}\n```'.format(msg.content))
+                    m_count = int(arg)
+                    if m_count <= 30:
+                        i = 0
+                        async for m in self.bot.logs_from(ctx.message.channel, limit=30):
+                            if i >= m_count:
+                                msg = m
+                                break
+                            i += 1
+                    else:
+                        msg = await self.bot.get_message(ctx.message.channel, arg)
+
+                if not msg:
+                    await self.bot.say('Message not found.')
+                    return
+
+                await self.bot.say('```\n{}\n```'.format(msg.content))
             except discord.Forbidden:
                 await self.bot.say("I don't have permission for that")
 
@@ -942,9 +1164,9 @@ class ServerUtils:
             if not ctx.message.server:
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             if new_name == 'help':
@@ -970,25 +1192,90 @@ class ServerUtils:
                     failures.append(m)
 
             if len(failures) > 0:
-                await self.bot.say('Operation complete. Failed to change: {}'.format(', '.join([x.name for x in failures])))
+                await self.bot.say(
+                    'Operation complete. Failed to change: {}'.format(', '.join([x.name for x in failures])))
 
         @self.bot.command(pass_context=True)
         async def mute(ctx, member: discord.Member, minutes: int = None):
             if not ctx.message.server:
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
+
+            timeout_role = None
+            try:
+                timeout_role = [x for x in ctx.message.server.roles if x.name.lower() == 'timeout'][0]
+            except Exception:
+                pass
 
             try:
                 await self.bot.server_voice_state(member=member, mute=True)
-                await self.bot.say('Muted ')
+                schedule_future(coro=self.bot.server_voice_state(member=member, mute=False),
+                                time=(minutes * 60))
+                await self.bot.say('Voice Muted {}'.format(member.name))
             except discord.Forbidden:
                 await self.bot.say('I do not have sufficient permissions to do this.')
             except discord.HTTPException:
                 await self.bot.say('An error occurred while attempting. Please try again.')
+
+            if timeout_role:
+                try:
+                    await self.bot.add_roles(member, timeout_role)
+                    schedule_future(coro=self.bot.remove_roles(member, timeout_role),
+                                    time=(minutes * 60))
+                    await self.bot.say('Text Muted {}'.format(member.name))
+                except discord.Forbidden:
+                    await self.bot.say('I do not have sufficient permissions to do this.')
+                except discord.HTTPException:
+                    await self.bot.say('An error occurred while attempting. Please try again.')
+            else:
+                await self.bot.say('There is no `Timeout` role to assign. Please create one to mute text features.')
+
+        @self.bot.command(pass_context=True)
+        async def leavechannel(ctx, arg: str, channel: discord.Channel = None):
+            if not ctx.message.server:
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
+                return
+
+            if arg == 'off':
+                in_server.leave_channel = None
+            elif arg == 'set' and channel:
+                in_server.leave_channel = channel.id
+
+            storage.write_server_data(self.bot, in_server)
+
+            out = await self.bot.say('✅')
+            schedule_delete(self.bot, out, 5)
+
+        # @perm(type_=permissions.MOD, bot=self.bot)
+        @self.bot.command(pass_context=True)
+        async def echo(ctx, *, arg: str):
+            await self.bot.say(arg)
+
+
+    @staticmethod
+    def replace_color(img: Image.Image, color: int, variance: int):
+        alpha = (color & 0xff000000) >> 24
+        red = (color & 0xff0000) >> 16
+        green = (color & 0xff00) >> 8
+        blue = color & 0xff
+
+        pixels = img.load()
+
+        for y in range(img.size[1]):
+            for x in range(img.size[0]):
+                at = pixels[x, y]
+                test_color = alpha | (at[0] << 16) | (at[1] << 8) | at[2]
+
+                if abs(color - test_color) <= variance:
+                    pixels[x, y] = (red, green, blue, alpha)
 
 
 def setup(bot):

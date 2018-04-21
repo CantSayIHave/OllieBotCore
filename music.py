@@ -2,16 +2,19 @@ import discord
 from discord.ext import commands
 import random
 from global_util import *
+from discordbot import DiscordBot
+import storage_manager as storage
+from music_queue import *
 
 
 class Music:
-    def __init__(self, bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
         self.music_loading = False
 
         @self.bot.group(pass_context=True)
         async def music(ctx):
-            """music is a group"""
+            pass
 
         @music.command(pass_context=True)
         async def play(ctx, *, arg: str = None):
@@ -20,82 +23,42 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
             if arg is None:
-                await self.play_next(in_server, ctx)
+                if in_server.music.unpause():
+                    await bot.send_message(ctx.message.channel, 'Music resumed :play_pause:')  # play after pause
+                    return
+
+                if in_server.music.is_playing():
+                    await self.bot.say('Music is already playing')
+                    return
+
+                await in_server.music.play_next(ctx, in_server, self.bot)
                 return
 
-            choice = self.is_num(arg)
-            if choice:
-                if not in_server.search_results:
-                    await self.bot.say('No search in progress. Initiate a search with `{0}music search [query]`'.format(
-                        self.bot.command_prefix))
-                    return
+            await queue.callback(ctx, arg=arg)
 
-                if choice < 1 or choice > len(in_server.search_results):
-                    await self.bot.say('Please enter a number between 1 and {0}'.format(len(in_server.search_results)))
-                    return
+            if in_server.music.is_playing():
+                await self.bot.say('Music is already playing')
+                return
 
-                result = in_server.search_results[choice - 1]  # choice to index num
-
-                url = 'https://www.youtube.com/watch?v={0}'.format(result['id']['videoId'])
-                in_server.add_music_raw(url, result['snippet']['title'], ctx.message.author.name)
-                place = in_server.get_track_pos(url)
-                await self.bot.say(
-                    'Track `' + result['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                    ' by `' + ctx.message.author.name + '`')
-                await self.play_next(in_server, ctx)
-                in_server.search_results = None
-
-            else:
-                if arg[:4] == 'http':
-                    vid_info = await in_server.add_music_url(arg, ctx.message.author.name)
-                    if vid_info:
-                        place = in_server.get_track_pos(arg)
-                        await self.bot.say(
-                            'Track `' + vid_info['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                            ' by `' + ctx.message.author.name + '`')
-                        await self.play_next(in_server, ctx)
-                    else:
-                        await self.bot.say('Video url is invalid :no_entry_sign:')
-                        return
-                else:
-                    result = None
-                    try:
-                        result = await yt.search_videos(arg, 1)
-                        result = result[0]
-                    except Exception as e:
-                        print('Bot play search failed: ' + str(e))
-                    if result:
-                        url = 'https://www.youtube.com/watch?v={}'.format(result['id']['videoId'])
-                        in_server.add_music_raw(url, result['snippet']['title'], ctx.message.author.name)
-                        place = in_server.get_track_pos(url)
-                        await self.bot.say(
-                            'Track `' + result['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                            ' by `' + ctx.message.author.name + '`')
-                        if in_server.music_player:
-                            if in_server.music_player.is_done() and not in_server.music_player.is_playing():
-                                await self.play_next(in_server, ctx)  # hopefully keep multiple instances from forming
-                        else:
-                            await self.play_next(in_server, ctx)
-                    else:
-                        global admins
-                        await self.bot.say('Search failed. Please report to <@{0}>'.format(admins[0]))  # admin, ie me
-
-            writeMusic(self.bot, in_server)
+            await in_server.music.play_next(ctx, in_server, self.bot)
 
         @music.command(pass_context=True)
-        async def queue(ctx, *, arg: str):
+        async def queue(ctx, *, arg: str = None):
+
+            if not arg:
+                arg = 'listall'
 
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
             if arg == 'clear':
-                if not has_high_permissions(ctx.message.author, in_server):
+                if not self.bot.has_high_permissions(ctx.message.author, in_server):
                     return
                 in_server.music.clear()
                 await self.bot.say('Cleared queue')
@@ -110,10 +73,14 @@ class Music:
                     em = discord.Embed(title='───────────────────────────', color=0xf4df41)  # gold
                     em.set_author(name='Tracks in Queue', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f3b6.png')
                     for i, track in enumerate(in_server.music):
-                        em.add_field(name='#{0}: `{1}`'.format(i + 1, track['title']),
-                                     value='Requested by {}'.format(track['user']),
+                        em.add_field(name='#{}: `{}`'.format(i + 1, track.title),
+                                     value='Requested by {}'.format(track.requestee),
                                      inline=False)
                     await self.bot.say(embed=em)
+                return
+
+            if len(in_server.music) >= MUSIC_QUEUE_LIMIT:
+                await self.bot.say('Queue is currently full.')
                 return
 
             choice = self.is_num(arg)
@@ -124,27 +91,25 @@ class Music:
                     return
 
                 if choice < 1 or choice > len(in_server.search_results):
-                    await self.bot.say('Please enter a number between 1 and {0}'.format(len(in_server.search_results)))
+                    await self.bot.say('Please enter a number between 1 and {}'.format(len(in_server.search_results)))
                     return
 
                 result = in_server.search_results[choice - 1]  # choice to index num
 
-                url = 'https://www.youtube.com/watch?v={0}'.format(result['id']['videoId'])
-                in_server.add_music_raw(url, result['snippet']['title'], ctx.message.author.name)
-                place = in_server.get_track_pos(url)
-                await self.bot.say(
-                    'Track `' + result['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                    ' by `' + ctx.message.author.name + '`')
+                url = 'https://www.youtube.com/watch?v={}'.format(result['id']['videoId'])
+                track = in_server.music.add_track_raw(url, result['snippet']['title'], ctx.message.author.name)
+                await self.bot.say('Track `{}` enqueued at spot #{} by `{}`'.format(track.title,
+                                                                                  len(in_server.music),
+                                                                                  track.requestee))
                 in_server.search_results = None
 
             else:
                 if arg[:4] == 'http':
-                    vid_info = await in_server.add_music_url(arg, ctx.message.author.name)
-                    if vid_info:
-                        place = in_server.get_track_pos(arg)
-                        await self.bot.say(
-                            'Track `' + vid_info['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                            ' by `' + ctx.message.author.name + '`')
+                    track = await in_server.music.add_track(arg, ctx.message.author.name)  # type: Track
+                    if track:
+                        await self.bot.say('Track `{}` enqueued at spot #{} by `{}`'.format(track.title,
+                                                                                          len(in_server.music),
+                                                                                          track.requestee))
                     else:
                         await self.bot.say('Video url is invalid :no_entry_sign:')
                         return
@@ -156,17 +121,16 @@ class Music:
                     except Exception as e:
                         print('Bot play search failed: ' + str(e))
                     if result:
-                        url = 'https://www.youtube.com/watch?v={0}'.format(result['id']['videoId'])
-                        in_server.add_music_raw(url, result['snippet']['title'], ctx.message.author.name)
-                        place = in_server.get_track_pos(url)
-                        await self.bot.say(
-                            'Track `' + result['snippet']['title'] + '` enqueued at spot #' + str(place) +
-                            ' by `' + ctx.message.author.name + '`')
+                        url = 'https://www.youtube.com/watch?v={}'.format(result['id']['videoId'])
+                        track = in_server.music.add_track_raw(url, result['snippet']['title'], ctx.message.author.name)
+                        await self.bot.say('Track `{}` enqueued at spot #{} by `{}`'.format(track.title,
+                                                                                          len(in_server.music),
+                                                                                          track.requestee))
                     else:
                         global admins
-                        await self.bot.say('Search failed. Please report to <@{0}>'.format(admins[0]))  # admin, ie me
+                        await self.bot.say('Search failed. Please report to <@{}>'.format(admins[0]))  # admin, ie me
 
-            writeMusic(self.bot, in_server)
+            storage.write_music(self.bot, in_server)
 
         @music.command(pass_context=True)
         async def pause(ctx):
@@ -175,63 +139,72 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
-            if in_server.music_player:
-                in_server.music_player.pause()
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if in_server.music.pause():
                 await self.bot.say('Music paused :play_pause:')
+            else:
+                await self.bot.say('Music is already paused')
+
+        @music.command(pass_context=True)
+        async def resume(ctx):
+
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if in_server.music.unpause():
+                await self.bot.say('Music resumed :play_pause:')  # play after pause
+            else:
+                await self.bot.say('Music is already playing')
 
         @music.command(pass_context=True)
         async def skip(ctx):
-            """if not self.has_high_permissions(ctx.message.author):
+            """if not self.self.bot.has_high_permissions(ctx.message.author):
                 return"""
 
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            bot_vc = self.bot.voice_client_in(ctx.message.server)  # type: discord.VoiceClient
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            bot_vc = in_server.music.bot_voice_client  # type: discord.VoiceClient
 
             if not bot_vc:
                 await self.bot.say('No music is playing.')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
-
-            perm = has_high_permissions(ctx.message.author, in_server)
+            perm = self.bot.has_high_permissions(ctx.message.author, in_server)
 
             if not perm:
                 if ctx.message.author.id in [x.id for x in bot_vc.channel.voice_members]:
-                    needed = len(bot_vc.channel.voice_members) * (2 / 3)
+                    needed = (len(bot_vc.channel.voice_members) - 1) * (2 / 3)  # subtract 1 to account for bot
                     if needed != int(needed):
-                        needed = int(needed)
+                        needed = int(needed) + 1
+                    if not in_server.music.vote_skip:
+                        if in_server.music.vote_skip_register(ctx.message.author):
+                            remaining = int(needed - 1)  # drop floating point
+                            if remaining > 0:
+                                await self.bot.say(
+                                    '{} has started a vote skip. Type `{}music sk` to join the vote. A 2/3 majority '
+                                    'passes ({} more vote{}).'.format(ctx.message.author.name,
+                                                                      self.bot.command_prefix,
+                                                                      remaining,
+                                                                      '' if remaining == 1 else 's'))  # magical s
                     else:
-                        needed -= 1
-                    if not in_server.vote_skip:
-                        in_server.vote_skip_register(ctx.message.author)
-                        remaining = needed - 1
-                        await self.bot.say(
-                            '{} has started a vote skip. Type `{}music sk` to join the vote. A 2/3 majority '
-                            'passes ({} more vote{}).'.format(ctx.message.author.name,
-                                                              self.bot.command_prefix,
-                                                              remaining,
-                                                              '' if remaining == 1 else 's'))  # magical s
-                        in_server.vote_skip_register(ctx.message.author)
-                    else:
-                        if in_server.vote_skip_register(ctx.message.author):
-                            remaining = needed - len(in_server.vote_skip)
+                        if in_server.music.vote_skip_register(ctx.message.author):
+                            remaining = int(needed - len(in_server.music.vote_skip))  # drop floating point
                             await self.bot.say('{} has joined the vote! {} more vote{} needed'
                                                ''.format(ctx.message.author.name,
                                                          remaining,
                                                          '' if remaining == 1 else 's'))  # more magic
 
-            if perm or in_server.vote_skip_check(bot_vc.channel):
-                in_server.vote_skip_clear()
-                if in_server.music_player:
-                    in_server.music_player.stop()
-                    in_server.music_player = None  # important - prevents autoplay loop from interfering
+            if perm or in_server.music.vote_skip_check(bot_vc.channel):
                 await self.bot.say('Track skipped :fast_forward:')
-                await self.play_next(in_server, ctx)
-                writeMusic(self.bot, in_server)
+                await in_server.music.skip()
 
         @music.command(pass_context=True)
         async def disconnect(ctx):
@@ -240,18 +213,18 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
             on_vc = self.bot.voice_client_in(ctx.message.server)
             if on_vc:
-                vc_name = on_vc.channel.name
-                await on_vc.disconnect()
                 try:
-                    in_server.music_player.stop()
+                    in_server.music.player.stop()
                 except AttributeError:
                     print('-No player to stop.')
-                in_server.music_player = None
-                in_server.music_channel = None
-                in_server.bot_voice_client = None
+                vc_name = on_vc.channel.name
+                await on_vc.disconnect()
+                in_server.music.player = None
+                in_server.music.autoplay_channel = None
+                in_server.music.bot_voice_client = None
                 await self.bot.say('Disconnected from voice channel `{}`'.format(vc_name))
             else:
                 await self.bot.say('Not connected to a voice channel')
@@ -261,9 +234,9 @@ class Music:
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
             if len(in_server.music) > 0:
-                random.shuffle(in_server.music)
+                random.shuffle(in_server.music.queue)
             await self.bot.say('Queue shuffled :twisted_rightwards_arrows:')
 
         @music.command(pass_context=True)
@@ -273,7 +246,7 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
             results = None
             try:
@@ -290,7 +263,6 @@ class Music:
                     out_str += ' {0}. {1} by {2}\n\n'.format(i + 1,
                                                              title,
                                                              ch_title)
-                    # out_str += out_line + self.dynamic_tab(out_line, 68) + "\n" + self.dynamic_tab("", 60) + "`\n"
                 out_str += '```\nPlease select an option by calling `{0}music queue #` or `{0}music play #`'.format(
                     self.bot.command_prefix)
                 await self.bot.say(out_str)
@@ -299,17 +271,22 @@ class Music:
                 await self.bot.say('Search failed. Please report to <@{0}>'.format(admins[0]))  # admin, ie me
 
         @music.command(pass_context=True)
-        async def bind(ctx, channel: discord.Channel):
+        async def bind(ctx, channel: discord.Channel = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            in_server.music_chat = channel
+            if not channel:
+                channel = ctx.message.channel
+
+            in_server.music.bind_chat = channel.id
+            in_server.music_chat = channel.id
+            storage.write_server_data(self.bot, in_server)
 
             await self.bot.say('Bound music commands to {0}'.format(channel.mention))
 
@@ -319,12 +296,14 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not has_high_permissions(ctx.message.author, in_server):
+            if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
             in_server.music_chat = None
+            in_server.music.bind_chat = None
+            storage.write_server_data(self.bot, in_server)
 
             await self.bot.say('Unbound music commands.')
 
@@ -334,22 +313,22 @@ class Music:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            in_server = get_server(ctx.message.server.id, self.bot)
+            in_server = self.bot.get_server(server=ctx.message.server)
 
-            if not in_server.music_player:
+            if not in_server.music.player:
                 await self.bot.say('There are no songs currently playing.')
                 return
 
             em = discord.Embed(title='───────────────────────────', color=0xf44242)  # red
             em.set_author(name='Current Track',
                           icon_url='https://abs.twimg.com/emoji/v2/72x72/1f3b5.png',
-                          url=in_server.music_player.url)
-            em.add_field(name='Title', value=in_server.music_player.title)
-            em.add_field(name='Requested By', value=in_server.current_track['user'])
-            em.add_field(name='Description', value=self.shorten_desc(in_server.music_player.description), inline=False)
-            em.add_field(name='Uploader', value=in_server.music_player.uploader)
-            em.add_field(name='Duration', value=self.time_from_sec(in_server.music_player.duration))
-            em.add_field(name='View Count', value=in_server.music_player.views)
+                          url=in_server.music.player.url)
+            em.add_field(name='Title', value=in_server.music.player.title)
+            em.add_field(name='Requested By', value=in_server.music.current_track.requestee)
+            em.add_field(name='Description', value=self.shorten_desc(in_server.music.player.description), inline=False)
+            em.add_field(name='Uploader', value=in_server.music.player.uploader)
+            em.add_field(name='Duration', value=self.time_from_sec(in_server.music.player.duration))
+            em.add_field(name='View Count', value=in_server.music.player.views)
 
             await self.bot.say(embed=em)
 
@@ -387,60 +366,9 @@ class Music:
                       '`shuffle:       sh`\n' \
                       '`disconnect:    d`\n' \
                       '`current:       c`\n\n' \
-                      "Example: `{0}music p ain't no rest for the triggered`\n"
+                      "Example: `{0}music p home resonance`\n"
 
             await self.bot.send_message(ctx.message.author, out_str.format(self.bot.command_prefix))
-
-    async def play_next(self, in_server, ctx):
-
-        if not isinstance(ctx.message.author, discord.Member):
-            await self.bot.send_message(ctx.message.channel, 'Music does not work in private messaging. Please join a '
-                                                             'voice channel on a server to proceed')
-            return False
-
-        vc = ctx.message.author.voice_channel
-        if not vc and not has_high_permissions(ctx.message.author, in_server):
-            await self.bot.send_message(ctx.message.channel, 'You are not in a voice channel. Please join one to call '
-                                                             '`{0}music play`'.format(self.bot.command_prefix))
-            return False
-
-        if in_server.music_player:
-            if not in_server.music_player.is_done():
-                if not in_server.music_player.is_playing():
-                    in_server.music_player.resume()
-                    await self.bot.send_message(ctx.message.channel, 'Music resumed :play_pause:')  # play after pause
-                    return
-                await self.bot.send_message(ctx.message.channel, 'Music is already playing.')
-                return False
-
-        if not vc:
-            await self.bot.send_message(ctx.message.channel, 'Please join a voice channel to call this.')
-            return
-
-        bot_vc = self.bot.voice_client_in(ctx.message.server)
-        if not bot_vc:
-            bot_vc = await self.bot.join_voice_channel(vc)
-            await self.bot.send_message(ctx.message.channel, 'Joined and bound to `{0}`'.format(bot_vc.channel.name))
-        next_up = in_server.get_music_url()
-        if next_up:  # Create streamer for next song and play
-            if self.music_loading:
-                return True
-            self.music_loading = True
-            in_server.music_player = await bot_vc.create_ytdl_player(next_up['url'], before_options="-reconnect 1")
-            self.music_loading = False
-
-            in_server.music_player.start()
-            in_server.music_player.volume = 1.0
-
-            in_server.music_channel = ctx.message.channel
-            in_server.bot_voice_client = bot_vc
-            await self.bot.send_message(ctx.message.channel,
-                                        'Track `{0}` enqueued by `{1}` is now playing.'.format(next_up['title'],
-                                                                                               next_up['user']))
-        else:
-            await self.bot.send_message(ctx.message.channel,
-                                        'There are no songs in the queue. Add with '
-                                        '`{0}music queue` or `{0}music play`'.format(self.bot.command_prefix))
 
     @staticmethod
     def shorten_str(word: str, new_length: int):
@@ -502,6 +430,7 @@ class Music:
             return '{}:{}'.format(out_minutes, out_seconds)
 
 
+"""
 async def autoplay_next(bot, in_server: Server):
     in_server.vote_skip_clear()
     next_up = in_server.get_music_url()
@@ -529,10 +458,10 @@ async def music_autoplay(s: Server, bot):  # bot is discord bot
             if s.music_channel and s.bot_voice_client:
                 if not (await autoplay_next(bot, s)):
                     if s.music_timeout():
-                        s.bot_voice_client.disconnect()
+                        await s.bot_voice_client.disconnect()
                         await bot.send_message(s.music_channel, 'Disconnecting due to inactivity. :sleeping:')
                         s.music_channel = None
-                        s.bot_voice_client = None
+                        s.bot_voice_client = None"""
 
 
 def setup(bot):

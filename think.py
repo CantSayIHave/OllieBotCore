@@ -6,10 +6,11 @@ import io
 import cv2
 from PIL import Image, ImageDraw, ImageOps
 from global_util import *
+from discordbot import DiscordBot
 
 
 class Think:
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
 
         @self.bot.command(pass_context=True)
@@ -53,8 +54,6 @@ class Think:
                 await think.callback(ctx, arg)
             else:
                 emote_uni = hex(ord(arg[0]))[2:]
-                print('first char is {}'.format(arg[0]))
-                print('found hex code of {}'.format(emote_uni))
                 ctx.message.attachments = [{'url': 'https://abs.twimg.com/emoji/v2/72x72/{}.png'.format(emote_uni)}]
                 await think.callback(ctx, arg=arg)
 

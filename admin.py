@@ -7,17 +7,20 @@ import shlex
 import global_util
 from global_util import *
 from server_utils import help_args
+from discordbot import DiscordBot
+from server import Server
+import storage_manager as storage
 
 
 class Admin:
-    def __init__(self, bot: discord.ext.commands.Bot):
+    def __init__(self, bot: DiscordBot):
         self.bot = bot
         self.help_args = help_args
 
         @self.bot.command(pass_context=True)
         async def repl(ctx, user: discord.Member = None):
 
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author.id):
                 return
 
             def prints(anything):
@@ -46,7 +49,7 @@ class Admin:
                     await self.bot.say('Exiting REPL.')
                     break
                 if ('exec' in line) or ('eval' in line):
-                    if not checkAdmin(ctx.message.author.id):
+                    if not self.bot.check_admin(ctx.message.author):
                         await self.bot.say('`exec` and `eval` are not allowed.')
                         continue
                 if 'global' in line:
@@ -69,7 +72,7 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def send(ctx, channel_id: str, *, msg_out: str):
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             await self.bot.send_message(discord.Object(id=channel_id), msg_out)
@@ -78,16 +81,15 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def write(ctx):
-            global bots
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
-            for b in bots:
-                writeBot(b.bot)
+            for b in self.bot.bot_list:
+                storage.write_bot(b)
             await self.bot.say('All bots serialized to json.')
 
         @self.bot.command(pass_context=True)
         async def invite(ctx):
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             await self.bot.say('My invite link is '
@@ -96,7 +98,7 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def prefix(ctx, arg: str = None, *, symbol: str = None):
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             if arg is None:
@@ -116,7 +118,7 @@ class Admin:
             if arg == 'set' and symbol is not None:
                 self.bot.command_prefix = symbol
                 self.prefix = symbol
-                writeBotData(self.bot)
+                storage.write_bot_data(self.bot)
                 await self.bot.say('Set bot prefix to `{0}`'.format(symbol))
 
         @self.bot.group(pass_context=True)
@@ -126,22 +128,21 @@ class Admin:
         @server.command(pass_context=True)
         async def add(ctx, bot_name: str, invite: str, q_delay: int):
 
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
-            global bots
             in_bot = None
             if bot_name == 'this':
                 in_bot = self.bot
             else:
                 bot_exists = False  # ensure requested bot actually exists
-                for b in bots:
+                for b in self.bot.bot_list:
                     if b.user.name == bot_name:
-                        in_bot = b.bot
+                        in_bot = b
                         bot_exists = True
                 if not bot_exists:
                     await self.bot.say('Requested bot does not exist')
@@ -154,7 +155,8 @@ class Admin:
 
             for se in in_bot.local_servers:
                 if se.name == in_server.server.name:
-                    await self.bot.say('Server ' + in_server.server.name + ' is already added to bot ' + in_bot.user.name)
+                    await self.bot.say('Server {} is already added to bot {}'.format(in_server.server.name,
+                                                                                     in_bot.user.name))
                     return
 
             if in_server:
@@ -172,27 +174,27 @@ class Admin:
                                              rss=s_rss,
                                              command_delay=q_delay,
                                              id=s_id))
-                writeBot(in_bot)
+                storage.write_bot(in_bot)
                 await self.bot.say('Server ' + s_name + ' added to bot ' + in_bot.user.name + '!')
 
         @server.command(pass_context=True)
         async def rename(ctx, to_name: str, new_name: str):
 
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             if to_name == new_name:
-                await self.bot.say("You can't rename a server to its own name")
+                await self.bot.say("You can't rename a server to its own name (╯°□°）╯︵ ┻━┻")
                 return
 
-            server_target = get_server_by_name(to_name, self.bot)
+            server_target = self.bot.get_server(name=to_name)
 
             if server_target is None:
-                await self.bot.say('Server ' + to_name + ' does not exist')
+                await self.bot.say('Server {} does not exist'.format(to_name))
                 return
 
-            new_wrong_server = get_server_by_name(new_name,
-                                                  self.bot)  # if renaming an old server to a new, delete new version
+            # if renaming an old server to a new, delete new version
+            new_wrong_server = self.bot.get_server(name=new_name)
             if new_wrong_server:
                 self.bot.local_servers.remove(new_wrong_server)
 
@@ -201,10 +203,10 @@ class Admin:
         @server.command(pass_context=True)
         async def remove(ctx, remove_name: str):
 
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
-            to_remove = get_server_by_name(remove_name, self.bot)
+            to_remove = self.bot.get_server(name=remove_name)
             if to_remove:
                 self.bot.local_servers.remove(to_remove)
             else:
@@ -212,8 +214,7 @@ class Admin:
 
         @server.command(pass_context=True)
         async def help(ctx):
-
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             await self.bot.send_message(ctx.message.author,
@@ -228,11 +229,10 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def backup(ctx):
-
-            if not checkAdmin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
-            save_backup()
+            storage.save_backup()
 
             await self.bot.say('All bots serialized to backup.')
 
@@ -247,16 +247,29 @@ class Admin:
                 global_util.internal_shutdown = True
 
         @self.bot.command(pass_context=True)
+        async def regen(ctx):
+            if ctx.message.author.id != OWNER_ID:
+                return
+
+            await self.bot.say('Regenerating core processes :zap: :repeat:')
+            print('Bot process restarted internally.')
+
+            while global_util.save_in_progress:
+                pass
+
+            if not global_util.save_in_progress:
+                exit(1)
+
+        @self.bot.command(pass_context=True)
         async def writeresp(ctx):
-            global bots
             if ctx.message.author.id != global_util.OWNER_ID:
                 return
 
             global_util.save_in_progress = True
 
-            for bc in bots:
-                for s in bc.servers:
-                    with open('bots/{}/{}/responses.json'.format(bc.name, s.name), 'w') as fi:
+            for b in self.bot.bot_list:
+                for s in b.servers:
+                    with open('bots/{}/{}/responses.json'.format(b.name, s.name), 'w') as fi:
                         resps = []
                         for q in s.commands:
                             q_name = q['name']
@@ -289,16 +302,15 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def writeblock(ctx):
-            global bots
             if ctx.message.author.id != global_util.OWNER_ID:
                 return
 
             global_util.save_in_progress = True
 
-            for bc in bots:
-                for s in bc.servers:
+            for b in self.bot.bot_list:
+                for s in b.servers:
                     s.block_list = [{'name': x, 'channel': 'all'} for x in s.block_list]
-                    writeServerData(bc.bot, s)
+                    storage.write_server_data(b, s)
 
             global_util.save_in_progress = False
 
@@ -315,7 +327,7 @@ class Admin:
 
         @self.bot.command(pass_context=True)
         async def sayd(ctx, text: str, *, args: str = None):
-            if not has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             if text == 'help':
@@ -374,6 +386,33 @@ class Admin:
                     await self.bot.say(text + ' ' + args)
                 else:
                     await self.bot.say(text)
+
+        @self.bot.command(pass_context=True)
+        async def delay(ctx, time: int, arg: str, *, args: str = None):
+            if ctx.message.author.id != global_util.OWNER_ID:
+                return
+
+            if arg == 'send':
+                schedule_future(coro=self.bot.send_message(ctx.message.channel, args), time=time)
+
+            elif arg == 'react':
+                if args.find('<') == 0:
+                    args = args.replace('<:', '')
+                    args = args.replace('>', '')
+                    emoji = args.split(':')
+                    emoji = discord.Emoji(name=emoji[0], id=emoji[1], require_colons=True)
+                else:
+                    emoji = args[0]
+
+                schedule_future(coro=self.bot.add_reaction(ctx.message, emoji), time=time)
+
+        @self.bot.command(pass_context=True)
+        async def serverid(ctx, name: str):
+            for b in self.bot.bot_list:
+                for s in b.servers:
+                    if s.name.lower() == name.lower():
+                        await self.bot.say('`{}`'.format(s.id))
+                        return
 
 
     @staticmethod
