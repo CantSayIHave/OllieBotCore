@@ -6,7 +6,7 @@ import copy
 import paginator
 import global_util
 from containers import *
-from discordbot import DiscordBot
+import discordbot
 from server import Server
 import storage_manager as storage
 from response import *
@@ -38,7 +38,7 @@ correct_to_display = {v: a for a, v in display_to_correct.items()}
 
 
 class Responses:
-    def __init__(self, bot: DiscordBot):
+    def __init__(self, bot):  # : discordbot.DiscordBot
         self.bot = bot
 
         @self.bot.group(pass_context=True)

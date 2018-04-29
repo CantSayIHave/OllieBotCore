@@ -248,7 +248,7 @@ class ServerUtils:
 
         @perm.command(pass_context=True)
         async def help(ctx):
-            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             await self.bot.send_message(ctx.message.author,
@@ -457,7 +457,7 @@ class ServerUtils:
 
         @self.bot.command(pass_context=True)
         async def clear(ctx, number: str = '99', channel: discord.Channel = None):
-            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             if number == 'help':
@@ -520,7 +520,7 @@ class ServerUtils:
 
         @self.bot.command(pass_context=True)
         async def purge(ctx, arg: str, arg2: str = None):
-            if not self.bot.has_high_permissions(ctx.message.author, b=self.bot):
+            if not self.bot.has_high_permissions(ctx.message.author):
                 return
 
             if arg == 'help':
@@ -911,7 +911,7 @@ class ServerUtils:
         @emotes.command(pass_context=True)
         async def help(ctx):
             out_str = "**Emotes usage:**\n"
-            if self.bot.has_high_permissions(ctx.message.author, b=self.bot):
+            if self.bot.has_high_permissions(ctx.message.author):
                 out_str += '`{0}emotes <suggest> [link]`\n' \
                            '`{0}emotes <suggest> (upload image in message)`\n' \
                            '`{0}emotes <add> <name> [link]`\n' \

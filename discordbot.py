@@ -4,12 +4,12 @@ import time
 
 import discord
 import re
+import asyncio
 from discord.ext import commands
 import global_util
 import responses
 import sense
-from server import Server
-from global_util import *
+import server
 import storage_manager as storage
 
 """
@@ -34,7 +34,7 @@ command_mappings = {'b-ify': 'b_ify',
 class DiscordBot(commands.Bot):
     def __init__(self, formatter=None, pm_help=False, **options):
         self.name = options.get('name', 'Default')
-        self.servers = options.get('servers', [])
+        self.local_servers = options.get('servers', [])
         self.token = options.get('token', '')
         self.desc = options.get('desc', 'No desc')
         self.prefix = options.get('prefix', '.')
@@ -114,11 +114,11 @@ class DiscordBot(commands.Bot):
                     real_server.name = message.server.name  # handle server name changes
                     storage.write_bot(self)
                 else:
-                    new_server = Server(name=message.server.name,
+                    new_server = server.Server(name=message.server.name,
                                         mods=[message.server.owner.id],
                                         command_delay=1,
                                         id=message.server.id)
-                    self.servers.append(new_server)
+                    self.local_servers.append(new_server)
                     storage.write_bot(self)
 
             await responses.execute_responses(message, self, in_server, content_lower=content_lower)
@@ -132,8 +132,8 @@ class DiscordBot(commands.Bot):
 
                 command_list = message.content.split(' ')
                 if len(command_list) > 1:
-                    if command_list[1] in music_commands:
-                        command_list[1] = music_commands[command_list[1]]
+                    if command_list[1] in global_util.music_commands:
+                        command_list[1] = global_util.music_commands[command_list[1]]
                         message.content = ' '.join(command_list)
 
             await self.handle_default_reactions(content_lower, message)
@@ -250,18 +250,18 @@ class DiscordBot(commands.Bot):
                                         'Bot command used for bot addition, removal, and management'.format(
                                             self.command_prefix))
 
-    def get_server(self, server: discord.Server = None, name: str = None, id: str = None) -> Server:
+    def get_server(self, server: discord.Server = None, name: str = None, id: str = None) -> server.Server:
         test_id = None
         if server:
             test_id = server.id
         elif id:
             test_id = id
         if test_id:
-            for s in self.servers:
+            for s in self.local_servers:
                 if s.id == test_id:
                     return s
         if name:
-            for s in self.servers:
+            for s in self.local_servers:
                 if s.name == name:
                     return s
 
@@ -279,12 +279,12 @@ class DiscordBot(commands.Bot):
                                 if com.channel == 'all':
                                     m = await self.send_message(message.channel,
                                                                 '`{}` is blocked in all channels'.format(root_cmd))
-                                    schedule_delete(self, m, 3)
+                                    global_util.schedule_delete(self, m, 3)
                                     return True
                                 elif com.channel == message.channel.id:
                                     m = await self.send_message(message.channel,
                                                                 '`{}` is blocked in this channel'.format(root_cmd))
-                                    schedule_delete(self, m, 3)
+                                    global_util.schedule_delete(self, m, 3)
                                     return True
 
                     if root_cmd in in_server.spam_timers:
@@ -320,7 +320,7 @@ class DiscordBot(commands.Bot):
     def check_admin(self, user: discord.User):
         return user.id in self.admins
 
-    def has_high_permissions(self, user: discord.User, server: Server = None):  # check for mod OR admin
+    def has_high_permissions(self, user: discord.User, server: server.Server = None):  # check for mod OR admin
         if user.id in global_util.bypass_perm:
             return False
 
@@ -332,10 +332,10 @@ class DiscordBot(commands.Bot):
         if server:
             check_servers.append(server)
         else:
-            check_servers.extend(self.servers)
+            check_servers.extend(self.local_servers)
 
         for s in check_servers:
-            if s.is_mod(user.id):
+            if s.is_mod(user):
                 return True
 
             if type(user) is discord.Member:
@@ -361,7 +361,7 @@ class DiscordBot(commands.Bot):
             await self.add_reaction(message, '🖤')
             await self.add_reaction(message, '🐝')
 
-    async def load_cogs(self, extensions):
+    def load_cogs(self, extensions):
         for ext in extensions:
             m = importlib.import_module(ext)
             self._cogs.append(m.setup(self))
@@ -373,12 +373,17 @@ class DiscordBot(commands.Bot):
 
         """
 
-        def decorator(ctx, *args):
+        async def decorator(ctx, *args):
+            if not ctx.message.server:
+                await self.bot.send_message(ctx.message.channel,
+                                            'Sorry, but this command is only accessible from a server')
+                return
+
             in_server = self.get_server(server=ctx.message.server)
             if not self.has_high_permissions(ctx.message.author, in_server):
                 return
-            func(ctx, in_server, *args)
-        return func
+            await func(ctx, *args)
+        return decorator
 
     @staticmethod
     def extract_id(text: str):

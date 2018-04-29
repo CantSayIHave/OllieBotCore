@@ -9,7 +9,6 @@ import asyncio
 from discord.ext import commands
 from collections import deque
 import global_util
-from discordbot import DiscordBot
 
 
 class Track:

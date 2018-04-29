@@ -78,7 +78,7 @@ sync_exit_timer = 0
 
 sync_shutdown = False
 
-startup_extensions = ["server_utils", "feeds", "fun", "responses", "music", "think", "sense", "help", "photoshop"]
+startup_extensions = ["server_utils", "feeds", "fun", "responses", "music", "think", "sense", "help", "photoshop", "admin"]
 
 replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]
 
@@ -148,13 +148,13 @@ async def delete_messages():
 
 
 async def background_async():
-    global bots, out_messages, rss_timer, alive_timer, exit_timer, async_exit_timer, sync_exit_timer, loop
+    global bots, loop
     while True:
         await asyncio.sleep(10)
         try:
-            while len(out_messages) > 0:
+            while len(global_util.out_messages) > 0:
                 try:
-                    msg_out = out_messages.popleft()  # type: ProxyMessage
+                    msg_out = global_util.out_messages.popleft()  # type: ProxyMessage
                     if msg_out.embed is None:
                         await msg_out.bot.send_message(msg_out.channel, msg_out.content)
                     else:
@@ -163,14 +163,7 @@ async def background_async():
                     print('Proxy sender failed at {}'.format(e))
 
             for b in bots:
-                for s in b.servers:  # type: Server
-
-                    for c in s.commands:
-                        delay = int(c['timer'])
-                        if delay > 0:
-                            delay -= 10
-                            c['timer'] = delay
-
+                for s in b.local_servers:  # type: Server
                     for c in s.spam_timers:
                         if s.spam_timers[c] > 0:
                             s.spam_timers[c] -= 10
@@ -183,23 +176,23 @@ async def background_async():
                     except Exception as e:
                         print('Music autoplay failed at: ' + str(e))"""
 
-            print('Alive ' + str(alive_timer))
+            print('Alive ' + str(global_util.alive_timer))
 
-            alive_timer += 1
-            if alive_timer > 6:
-                alive_timer = 0
+            global_util.alive_timer += 1
+            if global_util.alive_timer > 6:
+                global_util.alive_timer = 0
 
-            rss_timer += 10
+            global_util.rss_timer += 10
 
-            if rss_timer >= TIME_RSS_LOOP:
-                rss_timer = 0
+            if global_util.rss_timer >= TIME_RSS_LOOP:
+                global_util.rss_timer = 0
                 print('rss event')
                 for b in bots:  # type: DiscordBot
-                    for s in b.servers:  # type: Server
+                    for s in b.local_servers:  # type: Server
                         for r in s.rss:  # type: Feed
                             if r.type == 'twitter':
                                 try:
-                                    await b.loop.run_in_executor(def_executor, feeds.scrape_twitter(b, s, r))
+                                    await b.loop.run_in_executor(def_executor, lambda: feeds.scrape_twitter(b, s, r))
                                 except Exception as e:
                                     print('Twitter scrape failed with error: {}'.format(e))
 
@@ -215,8 +208,8 @@ async def background_async():
                                 except Exception as e:
                                     print('Youtube scrape failed with error: {}'.format(e))
 
-            exit_timer += 10
-            if exit_timer >= TIME_RESPONSE_EXIT and not global_util.save_in_progress:  # kill at 5 min
+            global_util.exit_timer += 10
+            if global_util.exit_timer >= global_util.TIME_RESPONSE_EXIT and not global_util.save_in_progress:  # kill at 5 min
                 exit(1)
 
             if global_util.internal_shutdown and (not global_util.save_in_progress):
@@ -235,7 +228,7 @@ bots = BotManager()
 
 # load bots by name into bot manager
 with open('globals/bots.json', 'r') as f:
-    bot_names = json.load(f)
+    bot_names = json.load(f)['bots']
     for name in bot_names:
         bots.add(storage.load_bot(name))
     f.close()

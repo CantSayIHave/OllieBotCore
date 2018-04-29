@@ -1,10 +1,10 @@
 import discord
 from discord.ext import commands
 from datetime import datetime
-from global_util import *
 import global_util
 import storage_manager as storage
 from discordbot import DiscordBot
+from containers import *
 
 
 class Feeds:
@@ -52,7 +52,7 @@ class Feeds:
                     global_util.rss_timer = 70
 
                 elif platform.lower() == 'twitch':
-                    twitch_channel = await twitch.get_channel_from_name(user)
+                    twitch_channel = await global_util.twitch.get_channel_from_name(user)
                     if not twitch_channel:
                         await self.bot.say('Twitch user `{}` does not exist'.format(user))
                         return
@@ -82,19 +82,19 @@ class Feeds:
                                 await self.bot.say('This link is invalid.')  # please don't judge me.
                                 return
                             token_start += len('channel/')
-                            ytchannel = await yt.get_channel_by_id(user[token_start:])
+                            ytchannel = await global_util.yt.get_channel_by_id(user[token_start:])
                             if not ytchannel:
                                 await self.bot.say('This link is invalid.')
                                 return
 
                         else:
                             token_start += len('user/')
-                            ytchannel = await yt.get_channel_by_name(user[token_start:])
+                            ytchannel = await global_util.yt.get_channel_by_name(user[token_start:])
                             if not ytchannel:
                                 await self.bot.say('This link is invalid.')
                                 return
                     else:
-                        ytchannel = await yt.get_channel_by_name(user)
+                        ytchannel = await global_util.yt.get_channel_by_name(user)
                     if not ytchannel:
                         await self.bot.say('Youtube user `{}` does not exist'.format(user))
                         return
@@ -130,7 +130,7 @@ class Feeds:
             if user[0] == '@':
                 user = user[1:]  # takes @ off a username
 
-            if platform.lower() not in rss_feeds:
+            if platform.lower() not in global_util.rss_feeds:
                 await self.bot.say('Sorry, {} is not a valid feed type.\n'
                                    'Supported feeds include Twitch, Twitter and YouTube'.format(platform))
                 return
@@ -151,7 +151,8 @@ class Feeds:
                 r_feed = in_server.get_rss(feed_channel, title=user, wide_search=True)
 
                 if r_feed:
-                    await self.bot.say('Removed Twitch feed for `{}` from {}'.format(r_feed.title, feed_channel.mention))
+                    await self.bot.say(
+                        'Removed Twitch feed for `{}` from {}'.format(r_feed.title, feed_channel.mention))
                     in_server.rss.remove(r_feed)
                     storage.write_rss(self.bot, in_server)
                 else:
@@ -186,8 +187,8 @@ class Feeds:
                         if arg == 'debug':
                             if r.type == 'twitter':
                                 out_str += 'User `@{}` has a Twitter feed on <#{}>, LID: {}\n'.format(r.uid,
-                                                                                                         r.channel_id,
-                                                                                                         r.last_id)
+                                                                                                      r.channel_id,
+                                                                                                      r.last_id)
                             elif r.type == 'youtube':
                                 out_str += 'User `{}` has a YouTube feed on <#{}>, LID: {}, CHID: {}\n'.format(
                                     r.title, r.channel_id, r.last_id, r.uid)
@@ -269,26 +270,28 @@ class Feeds:
 
 
 def scrape_twitter(b, s, r):
-    t_feed = twitter_api.GetUserTimeline(screen_name=r.uid, count=1)
+    t_feed = global_util.twitter_api.GetUserTimeline(screen_name=r.uid, count=1)
     if t_feed:
         last_tweet = t_feed[0]
         if last_tweet:
             if str(last_tweet.id) != str(r.last_id):
                 if str(r.last_id) == 'h':
-                    proxy_message(b,
-                                  r.channel_id,
-                                  'Twitter feed for `@{0}` has now been enabled.\n'
-                                  'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
+                    global_util.proxy_message(b,
+                                              r.channel_id,
+                                              'Twitter feed for `@{0}` has now been enabled.\n'
+                                              'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
                 else:
                     if last_tweet.text:
                         if last_tweet.text[0] != '@':
-                            proxy_message(b,
-                                          r.channel_id,
-                                          'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
+                            global_util.proxy_message(b,
+                                                      r.channel_id,
+                                                      'https://twitter.com/{0}/status/{1}'.format(r.uid,
+                                                                                                  str(last_tweet.id)))
                     else:
-                        proxy_message(b,
-                                      r.channel_id,
-                                      'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
+                        global_util.proxy_message(b,
+                                                  r.channel_id,
+                                                  'https://twitter.com/{0}/status/{1}'.format(r.uid,
+                                                                                              str(last_tweet.id)))
 
                 r.last_id = str(last_tweet.id)
                 storage.write_rss(b, s)  # bot, server
@@ -297,20 +300,20 @@ def scrape_twitter(b, s, r):
 async def scrape_youtube(b, s, r):
     search = None
     try:
-        search = await yt.get_channel_videos(r.uid, 1)
+        search = await global_util.yt.get_channel_videos(r.uid, 1)
     except Exception as e:
         print(e)
     if search:
         last_vid = search[0]
         if last_vid['id']['videoId'] != str(r.last_id):
             if str(r.last_id) == 'h':
-                proxy_message(b, r.channel_id,
-                              'Youtube feed for {} has now been enabled. All future '
-                              'updates will now push `@everyone` mentions for '
-                              'visibility. Here is the most recent video for this'
-                              'channel:\n'
-                              'https://www.youtube.com/watch?v={}'
-                              ''.format(str(r.title), last_vid['id']['videoId']))
+                global_util.proxy_message(b, r.channel_id,
+                                          'Youtube feed for {} has now been enabled. All future '
+                                          'updates will now push `@everyone` mentions for '
+                                          'visibility. Here is the most recent video for this'
+                                          'channel:\n'
+                                          'https://www.youtube.com/watch?v={}'
+                                          ''.format(str(r.title), last_vid['id']['videoId']))
                 r.last_time = last_vid['snippet']['publishedAt']
                 r.last_id = last_vid['id']['videoId']
                 storage.write_rss(b, s)  # bot, server
@@ -321,10 +324,10 @@ async def scrape_youtube(b, s, r):
                 last_time = datetime.strptime(r.last_time[:r.last_time.find('.')],
                                               '%Y-%m-%dT%H:%M:%S')
                 if this_time > last_time:
-                    proxy_message(b, r.channel_id,
-                                  '@everyone\n{} has a new video!\n'
-                                  'https://www.youtube.com/watch?v={}'
-                                  ''.format(str(r.title), last_vid['id']['videoId']))
+                    global_util.proxy_message(b, r.channel_id,
+                                              '@everyone\n{} has a new video!\n'
+                                              'https://www.youtube.com/watch?v={}'
+                                              ''.format(str(r.title), last_vid['id']['videoId']))
                     r.last_time = last_vid['snippet']['publishedAt']
                     r.last_id = last_vid['id']['videoId']
                     storage.write_rss(b, s)  # bot, server
@@ -333,23 +336,23 @@ async def scrape_youtube(b, s, r):
 async def scrape_twitch(b, s, r):
     stream = None
     try:
-        stream = await twitch.get_stream(r.uid)
+        stream = await global_util.twitch.get_stream(r.uid)
     except ValueError as e:
         print(e)
     if stream:
         if (str(stream['stream']['_id']) != str(r.last_id)) and (str(r.last_id) != 'h') and (
                     str(r.last_id) != 'd'):
-            proxy_message(b, r.channel_id,
-                          '{} is now streaming!\nhttps://www.twitch.tv/{}'
-                          ''.format(str(r.title), r.user))
+            global_util.proxy_message(b, r.channel_id,
+                                      '{} is now streaming!\nhttps://www.twitch.tv/{}'
+                                      ''.format(str(r.title), r.user))
             r.last_id = str(stream['stream']['_id'])
             storage.write_rss(b, s)  # bot, server
     else:
         if str(r.last_id) == 'h':
-            proxy_message(b.bot, r.channel_id,
-                          'Twitch feed for {} has now been enabled. Here is the most '
-                          'recent activity:\nhttps://www.twitch.tv/{}'
-                          ''.format(str(r.title), r.user))
+            global_util.proxy_message(b.bot, r.channel_id,
+                                      'Twitch feed for {} has now been enabled. Here is the most '
+                                      'recent activity:\nhttps://www.twitch.tv/{}'
+                                      ''.format(str(r.title), r.user))
             r.last_id = '111000'  # doesn't matter what this is
             storage.write_rss(b, s)
 

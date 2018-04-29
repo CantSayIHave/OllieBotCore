@@ -7,7 +7,6 @@ import random
 
 import discord
 from containers import EmbedField
-from discordbot import DiscordBot
 
 
 class Option:
@@ -35,7 +34,7 @@ class Option:
 
 async def paginate(items,
                    title: str,
-                   bot: DiscordBot,
+                   bot,  # DiscordBot
                    destination,
                    page_limit=10,
                    timeout=60,

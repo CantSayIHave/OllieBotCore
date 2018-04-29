@@ -1,9 +1,4 @@
-import discord
-import asyncio
-from discord.ext import commands
-import concurrent.futures
-import asyncio
-import shlex
+
 import global_util
 from global_util import *
 from server_utils import help_args
@@ -20,7 +15,7 @@ class Admin:
         @self.bot.command(pass_context=True)
         async def repl(ctx, user: discord.Member = None):
 
-            if not self.bot.check_admin(ctx.message.author.id):
+            if not self.bot.check_admin(ctx.message.author):
                 return
 
             def prints(anything):
@@ -413,6 +408,11 @@ class Admin:
                     if s.name.lower() == name.lower():
                         await self.bot.say('`{}`'.format(s.id))
                         return
+
+        @self.bot.command(pass_context=True)
+        async def checkadmin(ctx):
+            result = self.bot.check_admin(ctx.message.author)
+            await self.bot.say('check_admin shows you as: {}'.format(result))
 
 
     @staticmethod

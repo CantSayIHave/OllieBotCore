@@ -6,7 +6,7 @@ import errno
 import global_util
 from global_util import global_save
 from containers import *
-from discordbot import DiscordBot
+import discordbot
 from server import Server
 
 
@@ -58,7 +58,7 @@ except FileNotFoundError:
         global_util.pat_library = []
 
 
-def load_bot(bot_name: str) -> DiscordBot:
+def load_bot(bot_name: str):  # -> discordbot.DiscordBot
     with open('bots/{0}/{0}.json'.format(bot_name), 'r') as ff:
         bot_data = json.load(ff)
         server_list = []
@@ -126,26 +126,26 @@ def load_bot(bot_name: str) -> DiscordBot:
                                       leave_channel=s_leave_channel))  # Server Build
 
         print('Loaded bot {}'.format(bot_name))
-        return DiscordBot(name=bot_name,
+        return discordbot.DiscordBot(name=bot_name,
                           token=bot_data['token'],
                           desc=bot_data['desc'],
                           prefix=bot_data['prefix'],
                           playing_msg=bot_data['playing_msg'],
                           servers=server_list,
-                          admin_list=admins)
+                          admins=admins)
 
 
-@global_save
+@global_util.global_save
 def write_admins(admins: list):
     with open('globals/admins.json', 'w') as f:
         json.dump(admins, f)
 
 
-@global_save
+@global_util.global_save
 def write_bot_data(b):
     with open('bots/{0}/{0}.json'.format(b.name), 'w') as f:
-        bot_dict = {'token': b.local_token,
-                    'desc': b.local_desc,
+        bot_dict = {'token': b.token,
+                    'desc': b.desc,
                     'prefix': b.command_prefix,
                     'playing_msg': b.playing_message}
 
@@ -158,7 +158,7 @@ def write_bot_data(b):
         json.dump(bot_dict, f)
 
 
-@global_save
+@global_util.global_save
 def write_music(b, s):
     try:
         os.makedirs('bots/{}/music'.format(b.name))  # Make name directory in bots folder
@@ -172,27 +172,27 @@ def write_music(b, s):
         json.dump(s_music, fi)
 
 
-@global_save
+@global_util.global_save
 def write_hugs():
     with open('images/hugs.json', 'w') as fh:
         json.dump(global_util.hug_library, fh)
         fh.close()
 
 
-@global_save
+@global_util.global_save
 def write_pats():
     with open('images/pats.json', 'w') as fp:
         json.dump(global_util.pat_library, fp)
         fp.close()
 
 
-@global_save
+@global_util.global_save
 def save_backup():
     os.system('cp -r bots backups')
     os.system('cp -r globals backups')
 
 
-@global_save
+@global_util.global_save
 def write_server_data(b, s: Server):
     if b and s:
         with open('bots/{0}/{1}/{1}.json'.format(b.name, s.name), 'w') as fi:
@@ -235,8 +235,8 @@ def write_server_data(b, s: Server):
             json.dump(s_music, fi)
 
 
-@global_save
-def write_responses(b: DiscordBot, s: Server):
+@global_util.global_save
+def write_responses(b, s: Server):
     with open('bots/{}/{}/responses.json'.format(b.name, s.name), 'w') as fi:
         s_responses = [x.__dict__ for x in s.response_lib.responses]
 
@@ -252,8 +252,8 @@ def write_bot(b):
             raise
     with open('bots/{0}/{0}.json'.format(b.name), 'w') as f:
 
-        bot_dict = {'token': b.local_token,
-                    'desc': b.local_desc,
+        bot_dict = {'token': b.token,
+                    'desc': b.desc,
                     'prefix': b.command_prefix,
                     'playing_msg': b.playing_message}
 
@@ -313,7 +313,7 @@ def write_bot(b):
             json.dump(s_music, fi)
 
 
-@global_save
+@global_util.global_save
 def write_bot_names(bots: list):
     with open('globals/bots.json', 'w') as f:  # IMPORTANT: writes bot names into bots.json* in globals
         names = [x.name for x in bots]
@@ -323,7 +323,7 @@ def write_bot_names(bots: list):
         json.dump(bots_dict, f)
 
 
-@global_save
+@global_util.global_save
 def write_rss(b, s):
     if b and s:
         with open('bots/{}/{}/rss.json'.format(b.name, s.name), 'w') as fi:

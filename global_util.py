@@ -14,7 +14,6 @@ from worldtime import *
 from response import *
 from api_keys import *
 from containers import *
-import music_queue
 from olliebot_web import OllieBotAPI
 from PIL import Image
 
@@ -194,10 +193,10 @@ save_in_progress = False
 # save_in_progress decorator
 def global_save(func):
 
-    def decorator():
+    def decorator(*args, **kwargs):
         global save_in_progress
         save_in_progress = True
-        func()
+        func(*args, **kwargs)
         save_in_progress = False
     return decorator
 
