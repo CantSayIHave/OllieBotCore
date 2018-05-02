@@ -7,6 +7,23 @@ import cv2
 from PIL import Image, ImageDraw, ImageOps
 from global_util import *
 from discordbot import DiscordBot
+import command_util
+import face
+
+
+stickers = {'think_human': face.StickerProfile(name='think',
+                                               data_type='human',
+                                               fp='resources/think_hand.png',
+                                               scale=0.6,
+                                               sticker_x=lambda o, f: int(f.x_pos + (f.width / 2) - (2 * o.size[0] / 3)),
+                                               sticker_y=lambda o, f: int((f.y_pos + f.height) - (o.size[1] / 2))),
+            'think_anime': face.StickerProfile(name='think',
+                                               data_type='anime',
+                                               fp='resources/think_hand.png',
+                                               scale=0.5,
+                                               sticker_x=lambda o, f: int(f.x_pos + (f.width / 2) - (2 * o.size[0] / 3)),
+                                               sticker_y=lambda o, f: int((f.y_pos + f.height) - (4 * o.size[1] / 5)))
+            }
 
 
 class Think:
@@ -219,6 +236,60 @@ class Think:
                 os.remove('base_image.png')
             else:
                 await self.bot.say('Please embed an image')
+
+        @self.bot.command(pass_context=True)
+        async def think(ctx, arg: str = None, user: discord.User = None):
+            base_image = None
+
+            if arg:
+                converted_arg = command_util.find_arg(ctx, arg, ['emote'])
+
+                if type(converted_arg) is discord.Emoji:
+                    base_image = await get_image(converted_arg.url)
+                elif type(converted_arg) is str:
+                    if converted_arg.startswith('http'):
+                        base_image = await get_image(converted_arg)
+                    elif converted_arg in ['pfp', 'avatar']:
+                        if user:
+                            av_url = user.avatar_url
+                        else:
+                            av_url = ctx.message.author.avatar_url
+                        base_image = await get_image(av_url)
+                        base_image = style_pfp(base_image)
+            else:
+                if ctx.message.attachments:
+                    base_image = await get_image(ctx.message.attachments[0]['url'])
+                elif ctx.message.embeds:
+                    base_image = await get_image(ctx.message.embeds[0]['url'])
+
+            if not base_image:
+                await self.bot.say('Error finding base image :thinking:', delete_after=5)
+                return
+
+            result_name = face.apply_sticker(base_image,
+                                             human_profile=stickers['think_human'],
+                                             anime_profile=stickers['think_anime'],
+                                             loop=self.bot.loop,
+                                             executor=def_executor)
+
+            if result_name:
+                await self.bot.send_file(ctx.message.channel, result_name)
+            else:
+                await self.bot.send_message(ctx.message.channel, 'Error processing image :thinking:')
+
+
+def style_pfp(im: Image):
+    bigsize = (im.size[0] * 3, im.size[1] * 3)
+    mask = Image.new('L', bigsize, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0) + bigsize, fill=255)
+    mask = mask.resize(im.size, Image.ANTIALIAS)
+    im.putalpha(mask)
+
+    output = ImageOps.fit(im, mask.size, centering=(0.5, 0.5))
+    output.putalpha(mask)
+
+    return output
 
 
 def setup(bot):

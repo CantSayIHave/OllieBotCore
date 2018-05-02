@@ -84,6 +84,7 @@ class EmojiConverter:
         match = re.match(r'<:([a-zA-Z0-9_]+)+:([0-9]+)>$', self.arg)
         if match:
             return discord.Emoji(name=match.group(1), id=match.group(2), server='00000000', require_colons=True)
-        elif not re.match(r'https?:', self.arg):
+        # not re.match(r'https?:', self.arg)
+        elif len(self.arg) == 1:
             emote_uni = hex(ord(self.arg))[2:]
             return 'https://abs.twimg.com/emoji/v2/72x72/{}.png'.format(emote_uni)
