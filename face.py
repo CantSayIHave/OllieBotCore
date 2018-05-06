@@ -43,6 +43,7 @@ class StickerProfile:
 async def apply_sticker(base_image: Image,
                         human_profile: StickerProfile,
                         anime_profile: StickerProfile,
+                        default_profile: StickerProfile,
                         loop,
                         executor):
 
@@ -133,10 +134,10 @@ async def apply_sticker(base_image: Image,
             paste_y = face.y_pos
 
             if correct_profile.sticker_x:
-                paste_x = correct_profile.sticker_x(overlay, face)
+                paste_x = int(correct_profile.sticker_x(overlay, face))
 
             if correct_profile.sticker_y:
-                paste_y = correct_profile.sticker_y(overlay, face)
+                paste_y = int(correct_profile.sticker_y(overlay, face))
 
             base_image = base_image.convert("RGBA")
             overlay = overlay.convert("RGBA")
@@ -148,15 +149,31 @@ async def apply_sticker(base_image: Image,
         # scale overlay to base image, proportionally
         overlay = resize_overlay(overlay, to_image=base_image)
 
+        # scale overlay by profile scale constant
+        overlay = overlay.resize((int(overlay.size[0] * default_profile.scale),
+                                  int(overlay.size[1] * default_profile.scale)),
+                                 Image.ANTIALIAS)
+
+        paste_x = 0
+        paste_y = 0
+
+        # only 'face' is whole base image
+        dummy_face = FoundFace((0, 0, base_image.size[0], base_image.size[1]))
+
+        if default_profile.sticker_x:
+            paste_x = int(default_profile.sticker_x(overlay, dummy_face))
+
+        if default_profile.sticker_y:
+            paste_y = int(default_profile.sticker_y(overlay, dummy_face))
+
         base_image = base_image.convert("RGBA")
         overlay = overlay.convert("RGBA")
 
-        base_image.paste(overlay, (0, 0), overlay)
+        base_image.paste(overlay, (paste_x, paste_y), overlay)
 
     result_name = '{}.png'.format(correct_profile.name)
 
     base_image.save(result_name, format='PNG')
-
     return result_name
 
 

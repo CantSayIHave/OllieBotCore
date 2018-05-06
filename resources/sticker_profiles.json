@@ -1,0 +1,52 @@
+{
+  "stickers": {
+    "think_human": {
+      "name": "think",
+      "data_type": "human",
+      "fp": "resources/think_hand.png",
+      "scale": 0.6,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (2 * o.size[0] / 3)",
+      "sticker_y": "lambda o, f: (f.y_pos + f.height) - (o.size[1] / 2)"
+    },
+    "think_anime": {
+      "name": "think",
+      "data_type": "anime",
+      "fp": "resources/think_hand.png",
+      "scale": 0.5,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (2 * o.size[0] / 3)",
+      "sticker_y": "lambda o, f: (f.y_pos + f.height) - (4 * o.size[1] / 5)"
+    },
+    "think_default": {
+      "name": "think",
+      "data_type": "default",
+      "fp": "resources/think_hand.png",
+      "scale": 0.58,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (2 * o.size[0] / 3)",
+      "sticker_y": "lambda o, f: f.y_pos + ((3 / 7) * f.height)"
+    },
+    "boop_human": {
+      "name": "boop",
+      "data_type": "human",
+      "fp": "resources/point_up.png",
+      "scale": 0.6,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (4/10) * o.size[0]",
+      "sticker_y": "lambda o, f: (f.y_pos + f.height) - (7/9) * o.size[1]"
+    },
+    "boop_anime": {
+      "name": "boop",
+      "data_type": "anime",
+      "fp": "resources/point_up.png",
+      "scale": 0.5,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (4/10) * o.size[0]",
+      "sticker_y": "lambda o, f: (f.y_pos + f.height) - o.size[1]"
+    },
+    "boop_default": {
+      "name": "boop",
+      "data_type": "default",
+      "fp": "resources/point_up.png",
+      "scale": 0.58,
+      "sticker_x": "lambda o, f: f.x_pos + (f.width / 2) - (4/10) * o.size[0]",
+      "sticker_y": "lambda o, f: (f.y_pos + f.height) - (7/9) * o.size[1]"
+    }
+  }
+}

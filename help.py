@@ -31,8 +31,6 @@ help_args = {'audioconvert': {'d': 'convert audio to different format', 'm': Fal
              'rss': {'d': 'manage rss feeds for each channel', 'm': True},
              'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
              'think': {'d': 'really makes you think', 'm': False},
-             'thinke': {'d': 'really makes you think about emotes', 'm': False},
-             'thinkpfp': {'d': 'really makes you think about pfps', 'm': False},
              'unblock': {'d': 'unblock commands', 'm': True},
              'usrjoin': {'d': 'manage message to new users', 'm': True},
              'ytdl': {'d': 'youtube to mp3 converter', 'm': True},
