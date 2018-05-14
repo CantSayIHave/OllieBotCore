@@ -10,7 +10,7 @@ import youtube_dl
 import wikipedia
 import time
 import shlex
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from pydub import AudioSegment
 from wikipedia import DisambiguationError
 from wikipedia import PageError
@@ -1353,6 +1353,79 @@ class Fun:
 
             await self.bot.send_message(ctx.message.channel, embed=em)
 
+        @self.bot.command(pass_context=True)
+        async def color(ctx, arg: str, green: int = None, blue: int = None):
+
+            if arg == 'help':
+                await self.bot.whisper('**Color usage:**\n'
+                                       '`{0}color [hex]`\n'
+                                       '`{0}color [red] [green] [blue]`\n'
+                                       'Displays a sample of the requested color.\n'
+                                       '`[hex]` may be formatted as a 1-6 digit hexadecimal\n'
+                                       'number beginning with prefixes `0x` or `#`.\n'
+                                       '`red`, `[green]` and `[blue]` should each be an\n'
+                                       'integer from 0-255.\n'
+                                       '*Examples:*\n'
+                                       '`{0}color #ffaa00`\n'
+                                       '`{0}color 255 170 0`'
+                                       ''.format(self.bot.command_prefix))
+                return
+
+            image = None
+
+            if green is not None and blue is not None:
+                # convert arg (red) to int
+                if is_num(arg) is not None:
+                    arg = int(arg)
+                else:
+                    await self.bot.say('Please format RGB arguments as integers.', delete_after=5)
+                    print('arg is {}'.format(arg))
+                    return
+
+                # check ranges
+                if 0 <= arg <= 255 and 0 <= green <= 255 and 0 <= blue <= 255:
+                    # print('rgb found as {} {} {}'.format(arg, green, blue))
+                    image = self.build_color_sample(rgb=(arg, green, blue))
+                else:
+                    await self.bot.say('Please format `[red] [green] [blue]` as integers ranging from 0-255.',
+                                       delete_after=5)
+                    return
+            else:
+                # check for hex formatting
+                if 2 < len(arg) <= 8:
+
+                    absolute = arg.replace('0x', '').replace('#', '')
+                    if len(absolute) > 6:
+                        await self.bot.say('Please pass a 0-6 digit hex code.', delete_after=5)
+                        return
+
+                    val = arg.replace('#', '0x')
+                    arg = arg.replace('0x', '#')
+
+                    # convert to int
+                    try:
+                        val = int(val, 16)
+                    except:
+                        await self.bot.say('Please format `[hex]` as a hexadecimal color tag with digits 0-9,a-f.',
+                                           delete_after=5)
+                        return
+
+                    if '#' not in arg:
+                        arg = '#' + arg
+
+                    image = self.build_color_sample(hex_code=(arg, val))
+
+            if image:
+                image_bytes = io.BytesIO()
+                image.save(image_bytes, format='PNG')
+                await self.bot.send_file(ctx.message.channel,
+                                         io.BytesIO(image_bytes.getvalue()),
+                                         filename='color.png')
+
+        @self.bot.command(pass_context=True)
+        async def colour(ctx, *, arg: str = None):
+            await self.bot.say('Oopsie! Looks like you misspelled **color** 😄')
+
     @staticmethod
     def is_num(text: str):
         try:
@@ -1374,12 +1447,12 @@ class Fun:
         try:
             page = wikipedia.page(use_title)
         except DisambiguationError as e:
-            print('OPTION CHOSEN: ' + e.options[0])
+            # print('OPTION CHOSEN: ' + e.options[0])
             new_title = e.options[0]
             if new_title.find('§') != -1:
                 keys = new_title.split(' ')
                 new_title = keys[0]
-                print('Changed to ' + new_title)
+                # print('Changed to ' + new_title)
             try:
                 page = wikipedia.page(new_title)
             except DisambiguationError:
@@ -1403,14 +1476,6 @@ class Fun:
                 'image': img}
 
     @staticmethod
-    def is_num(text: str):
-        try:
-            num = int(text)
-            return num
-        except ValueError:
-            return None
-
-    @staticmethod
     def strip_args(args: str) -> list:
         arg_list = shlex.split(args, ' ')
         out_list = []
@@ -1419,6 +1484,79 @@ class Fun:
                 pieces = a.split('=')
                 out_list.append((pieces[0], pieces[1]))
         return out_list
+
+    @staticmethod
+    def on_range(arg, min, max):
+        """Test for value within a range
+
+        Inclusive:Exclusive bounds
+
+        :param arg: Test value
+        :param min: Lower bound of range
+        :param max: Upper bound of range
+        :return: `bool`
+        """
+        return min <= arg < max
+
+    @staticmethod
+    def get_contrast(red, green, blue) -> int:
+        if (1 - (0.299 * red + 0.587 * green + 0.114 * blue) / 255) < 0.5:
+            return 0
+        else:
+            return 0xffffff
+
+    def build_color_sample(self, rgb: tuple = None, hex_code: tuple = None) -> Image:
+        """
+        Generates a 100 x 50 color sample with hex code printed, centered
+
+        :param rgb: tuple(int), formatted (red, green, blue)
+        :param hex_code: int, intended format 0x######
+        :return: :class:`Image`, the resulting sample
+        """
+        sample_width, sample_height = (100, 50)
+        font = ImageFont.truetype('arial.ttf', 20)
+
+        if rgb:
+            # build background
+            image = Image.new('RGB', (sample_width, sample_height), rgb)
+
+            # build text string
+            color = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
+            color_text = hex(color)[2:]
+            while len(color_text) < 6:
+                color_text = '0' + color_text
+
+            color_text = '#' + color_text
+
+            # find text fill
+            fill = self.get_contrast(rgb[0], rgb[1], rgb[2])
+
+            # draw text
+            draw = ImageDraw.Draw(image)
+            w, h = draw.textsize(color_text, font=font)
+            draw.text(((sample_width - w)/2, (sample_height - h)/2), color_text, fill=fill, font=font)
+
+            return image
+        elif hex_code:
+            color_text = hex_code[0]
+            color_value = hex_code[1]
+            # build text string
+            # color_text = '#{}'.format(hex(hex_code)[2:])
+
+            # build background
+            image = Image.new('RGB', (sample_width, sample_height), color_text)
+
+            # get fill - shift r, g, b out of hex_code first
+            fill = self.get_contrast((color_value >> 16) & 0xff, (color_value >> 8) & 0xff, color_value & 0xff)
+
+            # draw text
+            draw = ImageDraw.Draw(image)
+            w, h = draw.textsize(color_text, font=font)
+            draw.text(((sample_width - w)/2, (sample_height - h)/2), color_text, fill=fill, font=font)
+
+            return image
+
+
 
 
 def setup(bot):
