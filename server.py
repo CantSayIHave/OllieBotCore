@@ -19,7 +19,7 @@ class Server(Hashable):
                  'id', 'reee', 'rolemods', 'spam_timers', 'block_list', 'bot_voice_client',
                  'search_results', 'suggest_emotes', 'music_player', 'music_chat', 'music_channel',
                  'music_loading', 'music_timer', 'late', 'current_track', 'vote_skip', 'join_message',
-                 'join_channel', 'leave_channel', 'response_lib', 'music']
+                 'join_channel', 'leave_channel', 'response_lib', 'music', 'capture']
 
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', 'Default')
@@ -55,6 +55,8 @@ class Server(Hashable):
         self.response_lib = ResponseLibrary(self.command_delay)
 
         self.music = music_queue.MusicQueue(queue=kwargs.get('queue', []), bind_chat=kwargs.get('music_chat', None))
+
+        self.capture = None
 
         responses = kwargs.get('responses', None)
         if responses:

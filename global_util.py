@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import os, io
+import re
 import errno
 import shlex
 from collections import deque
@@ -90,9 +91,9 @@ def yt_extract_id(url: str):
     return None
 
 
-def is_num(text: str):
+def is_num(text: str, base: int = 10):
     try:
-        num = int(text)
+        num = int(text, base)
         return num
     except (ValueError, TypeError):
         return None
@@ -170,6 +171,20 @@ def extract_image_url(arg, msg: discord.Message):
         return msg.attachments[0]['url']
     if msg.embeds:
         return msg.embeds[0]['url']
+
+
+def extract_filename(path):
+    if '.' in path[-5:]:
+        matches = re.findall(r'\b[a-zA-Z]+\.[a-zA-Z]{3}\b', path)
+        if matches:
+            return matches[-1]
+
+    matches = re.findall(r'\b([a-zA-Z]+)', path)
+
+    if matches:
+        return matches[-1]
+
+    return path
 
 
 # time in seconds

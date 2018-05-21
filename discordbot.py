@@ -28,7 +28,8 @@ replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]  # need
 command_mappings = {'b-ify': 'b_ify',
                     'nick-all': 'nick_all',
                     '8ball': 'eight_ball',
-                    'eightball': 'eight_ball'}
+                    'eightball': 'eight_ball',
+                    'ps': 'photoshop'}
 
 
 class DiscordBot(commands.Bot):
@@ -82,9 +83,7 @@ class DiscordBot(commands.Bot):
             # Avoid server-related content if in direct message
             if not message.server:
                 # treat all commands as lowercase
-                if not message.content[:message.content.find(' ')].islower():
-                    pieces = message.content.split(' ', maxsplit=1)
-                    message.content = ' '.join([pieces[0].lower(), pieces[1]])
+                message.content = self.command_lowercase(message.content)
 
                 await self.process_commands(message)
 
@@ -144,10 +143,7 @@ class DiscordBot(commands.Bot):
                 self.debug_timer = self.get_micros()
 
             # treat all commands as lowercase
-            if not message.content[:message.content.find(' ')].islower():
-                pieces = message.content.split(' ', maxsplit=1)
-                pieces.append('')
-                message.content = ' '.join([pieces[0].lower(), pieces[1]])
+            message.content = self.command_lowercase(message.content)
 
             await self.process_commands(message)
 
@@ -382,7 +378,24 @@ class DiscordBot(commands.Bot):
             in_server = self.get_server(server=ctx.message.server)
             if not self.has_high_permissions(ctx.message.author, in_server):
                 return
-            await func(ctx, *args)
+            await func(ctx, in_server, *args)
+        return decorator
+
+    def test_server(self, func):
+        """Decorator for testing for server
+
+        Passes found :class:`Server` object as second arg
+
+        """
+
+        async def decorator(ctx, *args):
+            if not ctx.message.server:
+                await self.bot.send_message(ctx.message.channel,
+                                            'Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.get_server(server=ctx.message.server)
+            await func(ctx, in_server, *args)
         return decorator
 
     @staticmethod
@@ -411,9 +424,16 @@ class DiscordBot(commands.Bot):
                 content = content.replace(swap[0], swap[1])
         return content
 
-    @staticmethod
-    def map_commands(content: str) -> str:
-        for mapping in command_mappings:
-            if mapping in content:
-                content = content.replace(mapping, command_mappings[mapping])
+    def map_commands(self, content: str) -> str:
+        if content[0] == self.command_prefix:
+            for mapping in command_mappings:
+                if mapping in content:
+                    content = content.replace(mapping, command_mappings[mapping], 1)
+        return content
+
+    def command_lowercase(self, content: str) -> str:
+        if content[0] == self.command_prefix:
+            command = content[:content.find(' ')]
+            if not command.islower():
+                return command.lower() + content[content.find(' '):]
         return content

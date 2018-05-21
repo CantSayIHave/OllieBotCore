@@ -2,6 +2,8 @@ from discord.ext import commands
 import discord
 from enum import Enum
 import re
+import global_util
+from PIL import Image, ImageDraw, ImageOps
 
 
 class ArgumentType(Enum):
@@ -88,3 +90,69 @@ class EmojiConverter:
         elif len(self.arg) == 1:
             emote_uni = hex(ord(self.arg))[2:]
             return 'https://abs.twimg.com/emoji/v2/72x72/{}.png'.format(emote_uni)
+
+
+async def find_message(bot, channel, message_num: int):
+    m_on = 0
+    async for m in bot.logs_from(channel, limit=int(message_num + 1)):
+        if m_on == message_num:
+            return m
+        m_on += 1
+
+
+async def find_image(bot, channel, image_num: int):
+    im_on = 1
+    async for m in bot.logs_from(channel, limit=100):  # type: discord.Message
+        if m.embeds:
+            if im_on == image_num:
+                return m.embeds[0]['url']
+            im_on += 1
+        if m.attachments:
+            if im_on == image_num:
+                return m.attachments[0]['url']
+            im_on += 1
+
+
+def style_pfp(im: Image):
+    bigsize = (im.size[0] * 3, im.size[1] * 3)
+    mask = Image.new('L', bigsize, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0) + bigsize, fill=255)
+    mask = mask.resize(im.size, Image.ANTIALIAS)
+    im.putalpha(mask)
+
+    output = ImageOps.fit(im, mask.size, centering=(0.5, 0.5))
+    output.putalpha(mask)
+
+    return output
+
+
+async def extract_image(ctx: commands.Context, arg: str = None, member: str = None):
+    base_image = None
+
+    if arg:
+        converted_arg = find_arg(ctx, arg, ['emoji'])
+
+        if type(converted_arg) is discord.Emoji:
+            base_image = await global_util.get_image(converted_arg.url)
+        elif type(converted_arg) is str:
+            if converted_arg.startswith('http'):
+                base_image = await global_util.get_image(converted_arg)
+            elif converted_arg in ['pfp', 'avatar']:
+                if member:
+                    member = find_arg(ctx, member, ['member'])
+                    if type(member) is not discord.Member:
+                        member = await find_member(ctx, member, percent=50)
+
+                if not member:
+                    member = ctx.message.author
+
+                base_image = await global_util.get_image(member.avatar_url)
+                base_image = style_pfp(base_image)
+    else:
+        if ctx.message.attachments:
+            base_image = await global_util.get_image(ctx.message.attachments[0]['url'])
+        elif ctx.message.embeds:
+            base_image = await global_util.get_image(ctx.message.embeds[0]['url'])
+
+    return base_image

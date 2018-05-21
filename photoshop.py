@@ -1,4 +1,5 @@
 import os
+import io
 import json
 
 import discord
@@ -10,7 +11,7 @@ from discordbot import DiscordBot
 import storage_manager as storage
 
 from PIL import Image, ImageDraw, ImageOps
-
+from server import Server
 
 storage.mkdir_safe('photoshop')
 storage.mkfile_safe('./photoshop/backgrounds.json', '{}')
@@ -36,7 +37,7 @@ class PhotoShop:
         self.bot = bot
         self.backgrounds = bg
 
-        @self.bot.group(name='ps')
+        @self.bot.group()
         async def photoshop():
             pass
 
@@ -137,10 +138,127 @@ class PhotoShop:
                 write()
                 await self.bot.say('Removed background `{}`!'.format(name))
 
-        @photoshop.command(pass_context=True, name='replace')
-        @self.bot.test_high_perm
-        async def replace_color(ctx, in_server, old: str, new: str = '0xffffff', image: str = None):
-            await self.bot.say("Replace it yourself :P\nServer = {}".format(in_server.name))
+        @photoshop.command(pass_context=True, aliases=['colorreplace', 'cr'])
+        @self.bot.test_server
+        async def replace_color(ctx, in_server: Server,
+                                old: str,
+                                new: str = '0xffffff',
+                                image: str = None,
+                                member: discord.Member = None):
+
+            if old == 'help':
+                await self.bot.whisper("**Colorreplace usage:**\n"
+                                       "`{0}ps <colorreplace/cr> [old color] [new color] [image url/emoji/'capture']`\n"
+                                       "`{0}ps <colorreplace/cr> [old color] [new color] <pfp> [optional:@member]`\n"
+                                       "`{0}ps <colorreplace/cr> [old color] [new color] (embed image)`\n"
+                                       "Replaces one color with another in selected image.\n"
+                                       "*Note: transparency is ignored.*\n"
+                                       "__Examples:__\n"
+                                       "`{0}ps colorreplace ff0000 00ff00 ❤`\n"
+                                       "`{0}ps cr #000000 #ffaa00 capture`\n"
+                                       "`{0}ps cr ffffff 000000 (embed image)`"
+                                       "".format(self.bot.command_prefix))
+                return
+
+            if old is None or new is None:
+                await self.bot.say('Please supply an `[old]` and `[new]` color. 🖌')
+                return
+
+            old = old.replace('#', '').replace('0x', '')
+            new = new.replace('#', '').replace('0x', '')
+
+            old = self.force_alpha(old)
+            new = self.force_alpha(new)
+
+            if not global_util.is_num(old, 16) or not global_util.is_num(new, 16):
+                await self.bot.say('Please supply `[old]` and `[new]` as hexadecimal color codes. #⃣')
+                return
+
+            base_image = None
+
+            if image == 'capture':
+                if not in_server.capture:
+                    await self.bot.say('There is no image currently captured! Use `{0}ps capture` to capture one.'
+                                       ''.format(self.bot.command_prefix))
+                    return
+
+                base_image = await global_util.get_image(in_server.capture)
+
+            else:
+                base_image = await command_util.extract_image(ctx, image, member)
+
+            if not base_image:  # type:Image
+                await self.bot.say('Please supply a base image. 📀')
+                return
+
+            m = await self.bot.say('Please enter a tolerance for color testing, as a number or percentage. '
+                                   '(Default is 5)')
+            reply = await self.bot.wait_for_message(author=ctx.message.author, channel=ctx.message.channel)
+
+            await self.bot.delete_message(message=m)  # erase prompt
+
+            try:
+                if '%' in reply.content:
+                    tolerance = abs(int((float(reply.content.replace('%', '')) / 100) * 255))
+                else:
+                    tolerance = int(reply.content)
+            except:
+                await self.bot.say('Tolerance must be an integer or percentage! Set tolerance to 5.')
+                tolerance = 5
+
+            self.replace_color(base_image, int(old, 16), int(new, 16), tolerance)
+
+            image_bytes = io.BytesIO()
+            base_image.save(image_bytes, format='PNG')
+            await self.bot.send_file(ctx.message.channel,
+                                     io.BytesIO(image_bytes.getvalue()),
+                                     filename='replaced.png')
+
+        @photoshop.command(pass_context=True)
+        async def capture(ctx, arg: str):
+            if arg == 'help':
+                await self.bot.whisper('**Capture usage:**\n'
+                                       '`{0}capture [number]`\n'
+                                       'Capture is a photoshop module command that '
+                                       'allows the capture of an image for use in any '
+                                       'photoshop command. Images able to be captured '
+                                       'are any embedded, uploaded or otherwise linked '
+                                       'in the last 100 messages for each channel. Once '
+                                       'an image is captured, it is globally stored. You '
+                                       'may use it with name `capture` in any photoshop '
+                                       'command.\n\n'
+                                       'The argument `number` is the image number in the '
+                                       'channel, counting up from most recent.'
+                                       ''.format(self.bot.command_prefix))
+                return
+
+            if not ctx.message.server:
+                await self.bot.say('Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.bot.get_server(server=ctx.message.server)
+
+            if arg == 'get':
+                await self.bot.say('Current capture is {}'.format(in_server.capture))
+                return
+
+            arg = global_util.is_num(arg)
+
+            if arg is None:
+                return
+
+            if arg < 1:
+                arg = 1
+
+            captured = await command_util.find_image(self.bot, ctx.message.channel, image_num=arg)
+
+            if captured:
+                filename = global_util.extract_filename(captured)
+                await self.bot.say('Captured `{}`'.format(filename))
+
+                in_server.capture = captured
+            else:
+                await self.bot.say('Nothing found... 🤔')
 
     def replace_color(self, image: Image, base_hex, replace_hex, variance: int, spare=False, alpha=False):
         if type(base_hex) is int:
@@ -159,6 +277,8 @@ class PhotoShop:
         else:
             compare = self.color_compare
 
+        print('mid tuple is {}'.format(data[36, 36]))
+
         if spare:
             for y in range(image.size[1]):
                 for x in range(image.size[0]):
@@ -169,6 +289,8 @@ class PhotoShop:
                 for x in range(image.size[0]):
                     if compare(data[x, y], b_tuple, variance):
                         data[x, y] = r_tuple
+
+                        # return image
 
     @staticmethod
     def color_tuple(c_hex: int):
@@ -182,6 +304,8 @@ class PhotoShop:
     # only checks r, g, b
     @staticmethod
     def color_compare(tA, tB, variance: int):
+        if tA[3] < variance:  # ignore alpha
+            return False
         return abs(tA[0] - tB[0]) <= variance and \
                abs(tA[1] - tB[1]) <= variance and \
                abs(tA[2] - tB[2]) <= variance
@@ -190,7 +314,16 @@ class PhotoShop:
     def alpha_compare(tA: tuple, tB: tuple, variance: int):
         return abs(tA[3] - tB[3]) <= variance
 
+    @staticmethod
+    def force_alpha(color: str):
+        while len(color) < 6:
+            color = '0' + color
+
+        while len(color) < 8:
+            color = 'f' + color
+
+        return color
+
 
 def setup(bot):
     return PhotoShop(bot, backgrounds)
-
