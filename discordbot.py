@@ -425,10 +425,10 @@ class DiscordBot(commands.Bot):
         return content
 
     def map_commands(self, content: str) -> str:
-        if content[0] == self.command_prefix:
-            for mapping in command_mappings:
-                if mapping in content:
-                    content = content.replace(mapping, command_mappings[mapping], 1)
+        if content.find(self.command_prefix) == 0:
+            command = content[len(self.command_prefix):content.find(' ')]
+            if command in command_mappings:
+                return self.command_prefix + command_mappings[command] + content[content.find(' '):]
         return content
 
     def command_lowercase(self, content: str) -> str:
