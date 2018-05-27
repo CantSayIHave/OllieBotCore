@@ -871,14 +871,6 @@ class Fun:
                 await self.bot.say('Late timer set to {}.'.format(to_set))
 
         @self.bot.command(pass_context=True)
-        async def reactd(ctx, type: str, arg1: str = '', arg2: str = '', *, text: str = ''):
-            await asyncio.sleep(0.2)
-            await self.bot.delete_message(ctx.message)
-            if is_num(type) is not None:
-                type = str(int(type) - 1)
-            await react.callback(ctx, type=type, arg1=arg1, arg2=arg2, text=text)
-
-        @self.bot.command(pass_context=True)
         async def react(ctx, type: str, arg1: str = '', arg2: str = '', *, text: str = ''):
             if type == 'help':
                 await self.bot.send_message(ctx.message.author, '**React help:**\n'
@@ -933,6 +925,21 @@ class Fun:
 
             used_emotes = []
             failures = []  # for troubleshooting
+
+            # literally get key by value, how clever i know
+            def get_key(emoji: str):
+                for k, v in emoji_alphabet.items():
+                    if emoji in v:
+                        return k
+
+            # begin by loading current reactions into used_emotes
+            if target_message.reactions:
+                for r in target_message.reactions:  # type:discord.Reaction
+                    if isinstance(r.emoji, str):
+                        used_emotes.append(r.emoji)
+                        char = get_key(r.emoji)
+                        if char in text:
+                            text = text[text.find(char)+1:]
 
             lower = text.lower()
             skip = False  # for skipping loops when pairs are present
