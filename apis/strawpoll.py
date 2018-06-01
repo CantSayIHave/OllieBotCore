@@ -2,14 +2,14 @@
 # Created 2018/01/26
 #
 # Create polls because why do more work when the bot can
-
+import json
 
 import aiohttp
 
 
 class StrawPoll:
 
-    api_endpoint = 'https://strawpoll.me/api/v2/polls'
+    api_endpoint = 'https://www.strawpoll.me/api/v2/polls'
     dupcheck_options = ['normal', 'permissive', 'disabled']
 
     create_options = ['title', 'options', 'multi', 'dupcheck', 'captcha']
@@ -54,7 +54,7 @@ class StrawPoll:
         print('Sent {}'.format(self.build_options()))
 
         with aiohttp.ClientSession() as session:
-            async with session.post(url=self.api_endpoint, data=self.build_options()) as resp:
+            async with session.post(url=self.api_endpoint, data=json.dumps(self.build_options())) as resp:
                 if resp.status == 200:
                     j = await resp.json()
                     self.id = j.get('id', None)

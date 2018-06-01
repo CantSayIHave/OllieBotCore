@@ -387,7 +387,7 @@ class Fun:
 
             await self.bot.say(embed=e)
 
-        @self.bot.command(pass_context=True)
+        @self.bot.command(pass_context=True, aliases=['usrinfo'])
         async def userinfo(ctx, member: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')

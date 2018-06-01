@@ -538,7 +538,7 @@ class ServerUtils:
 
                     number = is_num(arg2)
                     if not number:
-                        number = 99
+                        number = 10
                 else:
                     member = None
             else:
