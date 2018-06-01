@@ -81,6 +81,8 @@ class Fun:
                 await self.bot.say('good human')
             elif noun == 'human':
                 await self.bot.say('GOOD FELLOW HUMAN')
+            elif noun == 'help':
+                await self.bot.say('I try 😊')
             else:
                 await self.bot.say('good what?')
 
@@ -97,6 +99,8 @@ class Fun:
                 await self.bot.say('{0} bad human'.format(ctx.message.author.mention))
             elif arg == 'human':
                 await self.bot.say('{0} BAD FELLOW HUMAN AS WELL'.format(ctx.message.author.mention))
+            elif arg == 'help':
+                await self.bot.say("Well I'm more help than you 😤")
 
         @self.bot.command(pass_context=True)
         async def playing(ctx, *, message: str):
@@ -148,7 +152,7 @@ class Fun:
             else:
                 await self.bot.say('`{}` is not a valid presence type'.format(type))
 
-        @self.bot.command(pass_context=True)
+        @self.bot.command(pass_context=True, aliases=['b-ify', 'bify'])
         async def b_ify(ctx, *, arg: str):
 
             if arg == 'help':

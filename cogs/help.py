@@ -1,3 +1,4 @@
+import discord
 from discord.ext import commands
 
 from util.containers import *
@@ -81,6 +82,25 @@ class Help:
                                      icon='https://abs.twimg.com/emoji/v2/72x72/2753.png',
                                      color=0xff0000)
 
+async def intercept_help(message: discord.Message, bot):
+    if not message.content:
+        return False
+
+    if message.content.find(bot.command_prefix) != 0:
+        return False
+
+    pieces = message.content.split(' ')
+
+    if len(pieces) >= 2 and pieces[1] == 'help':
+        query = pieces[0].replace(bot.command_prefix, '')
+        await send_help(query, bot)
+        return True
+
+    return False
+
+
+async def send_help(command: str, bot):
+    pass
 
 def setup(bot):
     return Help(bot)
