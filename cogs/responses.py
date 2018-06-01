@@ -1,16 +1,13 @@
-import discord
-from discord.ext import commands
-import random
-import shlex
 import copy
-import paginator
-import global_util
-from containers import *
-import discordbot
-from server import Server
+import shlex
+
+from discord.ext import commands
+
 import storage_manager as storage
 from response import *
-
+from server import Server
+from util import global_util, paginator
+from util.containers import *
 
 arg_to_data = {'true': True,
                'false': False,

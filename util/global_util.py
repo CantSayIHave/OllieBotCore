@@ -1,22 +1,20 @@
-import discord
-from discord.ext import commands
+import concurrent.futures
+import io
 import json
-import os, io
 import re
-import errno
 import shlex
 from collections import deque
+
 import twitter
-import asyncio
-import concurrent.futures
-from youtubeapi import YoutubeAPI
-import twitch_rss
-from worldtime import *
-from response import *
-from api_keys import *
-from containers import *
-from olliebot_web import OllieBotAPI
 from PIL import Image
+
+from api_keys import *
+from apis import twitch_rss
+from apis.olliebot_web import OllieBotAPI
+from apis.worldtime import *
+from apis.youtubeapi import YoutubeAPI
+from response import *
+from util.containers import *
 
 
 # Returns a BotContainer by name
@@ -263,7 +261,7 @@ OWNER_ID = '305407800778162178'
 
 MUSIC_QUEUE_LIMIT = 50
 
-with open('emoji_alphabet.json', 'r', encoding='utf8') as f:
+with open('resources/emoji_alphabet.json', 'r', encoding='utf8') as f:
     emoji_alphabet = json.load(f)
 
 twitter_api = twitter.Api(consumer_key=TWITTER_CONSUMER_KEY,

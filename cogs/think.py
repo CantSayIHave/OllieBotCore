@@ -1,15 +1,12 @@
-from discord.ext import commands
-import aiohttp
-import discord
-import os
-import io
-import cv2
 import json
+
+import discord
 from PIL import Image, ImageDraw, ImageOps
-import global_util
-from discordbot import DiscordBot
-import command_util
+from discord.ext import commands
+
 import face
+from discordbot import DiscordBot
+from util import global_util, command_util
 
 stickers = {}
 with open("resources/sticker_profiles.json", 'r') as f:

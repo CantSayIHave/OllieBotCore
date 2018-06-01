@@ -6,7 +6,8 @@
 import random
 
 import discord
-from containers import EmbedField
+
+from util.containers import EmbedField
 
 
 class Option:

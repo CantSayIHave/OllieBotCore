@@ -1,16 +1,16 @@
+import asyncio
 import importlib
 import random
+import re
 import time
 
 import discord
-import re
-import asyncio
 from discord.ext import commands
-import global_util
-import responses
-import sense
+
 import server
 import storage_manager as storage
+from cogs import responses, sense
+from util import global_util
 
 """
 Breaking Changes:

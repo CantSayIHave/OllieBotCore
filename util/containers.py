@@ -112,3 +112,11 @@ class EmbedField:
                                                      self.value,
                                                      self.inline)
 
+
+class CommandContext:
+    def __init__(self, content: str, bot):
+        self.content = content
+        self.is_command = (content.find(bot.command_prefix) == 0)
+        self.command = content[:content.find(' ')]
+        if self.is_command:
+            self.command = self.command[len(bot.command_prefix):]

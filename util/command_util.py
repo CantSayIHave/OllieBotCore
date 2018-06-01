@@ -1,9 +1,11 @@
-from discord.ext import commands
-import discord
-from enum import Enum
 import re
-import global_util
+from enum import Enum
+
+import discord
 from PIL import Image, ImageDraw, ImageOps
+from discord.ext import commands
+
+from util import global_util
 
 
 class ArgumentType(Enum):

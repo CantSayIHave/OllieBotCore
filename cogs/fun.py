@@ -1,28 +1,19 @@
-import functools
-
-import discord
-from discord.ext import commands
 import copy
-import random
-import aiohttp
-import io
-import youtube_dl
+import functools
+import os
+
 import wikipedia
-import time
-import shlex
-from PIL import Image, ImageDraw, ImageFont
+import youtube_dl
+from PIL import ImageDraw, ImageFont
 from pydub import AudioSegment
 from wikipedia import DisambiguationError
 from wikipedia import PageError
 
-import command_util
-from global_util import *
-import global_util
-from strawpoll import *
-from discordbot import DiscordBot
-from server import Server
 import storage_manager as storage
-
+from apis.strawpoll import *
+from discordbot import DiscordBot
+from util import global_util, command_util
+from util.global_util import *
 
 num2regional = {0: '0⃣',
                 1: '1⃣',

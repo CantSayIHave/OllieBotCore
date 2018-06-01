@@ -4,11 +4,13 @@
 # revised music setup
 
 
-import discord
 import asyncio
-from discord.ext import commands
 from collections import deque
-import global_util
+
+import discord
+from discord.ext import commands
+
+from util import global_util
 
 
 class Track:

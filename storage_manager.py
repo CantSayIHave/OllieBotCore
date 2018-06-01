@@ -1,14 +1,11 @@
+import errno
 import json
 import os
 
-import errno
-
-import global_util
-from global_util import global_save
-from containers import *
 import discordbot
 from server import Server
-
+from util import global_util
+from util.containers import *
 
 with open('globals/admins.json', 'r') as f:
     admins = json.load(f)

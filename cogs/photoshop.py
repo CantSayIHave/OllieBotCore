@@ -1,17 +1,14 @@
-import os
 import io
 import json
+import os
 
 import discord
-from discord.ext import commands
+from PIL import Image
 
-import command_util
-import global_util
-from discordbot import DiscordBot
 import storage_manager as storage
-
-from PIL import Image, ImageDraw, ImageOps
+from discordbot import DiscordBot
 from server import Server
+from util import global_util, command_util
 
 storage.mkdir_safe('photoshop')
 storage.mkfile_safe('./photoshop/backgrounds.json', '{}')

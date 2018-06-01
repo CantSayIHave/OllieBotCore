@@ -1,9 +1,6 @@
-import discord
 from discord.ext import commands
-from global_util import *
-from containers import *
-import paginator
 
+from util.containers import *
 
 help_args = {'audioconvert': {'d': 'convert audio to different format', 'm': False},
              'clear': {'d': 'clear bot messages', 'm': True},

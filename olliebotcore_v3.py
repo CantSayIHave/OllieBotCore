@@ -1,19 +1,11 @@
-import time
-import random
-import json
-import sys
-import os
+import asyncio
 
-from datetime import datetime
-import importlib
-import global_util
-from global_util import *
-from containers import *
+import storage_manager as storage
+from cogs import feeds
 from discordbot import DiscordBot
 from server import Server
-import storage_manager as storage
-
-import admin, feeds, fun, music, responses, server_utils, think, sense, help
+from util import global_util
+from util.global_util import *
 
 random.seed()
 
@@ -79,6 +71,8 @@ sync_exit_timer = 0
 sync_shutdown = False
 
 startup_extensions = ["server_utils", "feeds", "fun", "responses", "music", "think", "sense", "help", "photoshop", "admin"]
+
+startup_extensions = ['cogs.{}'.format(x) for x in startup_extensions]
 
 replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]
 

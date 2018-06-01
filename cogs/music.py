@@ -1,10 +1,7 @@
-import discord
-from discord.ext import commands
-import random
-from global_util import *
-from discordbot import DiscordBot
 import storage_manager as storage
+from discordbot import DiscordBot
 from music_queue import *
+from util.global_util import *
 
 
 class Music:

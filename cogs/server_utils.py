@@ -1,15 +1,9 @@
-import discord
 import asyncio
-from discord.ext import commands
 from base64 import b64encode
-import time
-import io
-import aiohttp
-from PIL import Image
-from global_util import *
-from containers import *
-from discordbot import DiscordBot
+
 import storage_manager as storage
+from discordbot import DiscordBot
+from util.global_util import *
 
 # custom help dict to hold data on command accessibility
 help_args = {

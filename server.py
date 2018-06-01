@@ -1,9 +1,10 @@
 import discord
-import global_util
-from response import *
-import music_queue
-from containers import *
 from discord.mixins import Hashable
+
+import music_queue
+from response import *
+from util import global_util
+from util.containers import *
 
 
 class Server(Hashable):
