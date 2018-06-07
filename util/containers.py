@@ -120,3 +120,25 @@ class CommandContext:
         self.command = content[:content.find(' ')]
         if self.is_command:
             self.command = self.command[len(bot.command_prefix):]
+
+
+class HelpForm:
+    def __init__(self, content: str):
+        self.content = content
+        self.details = {}
+
+    def __str__(self):
+        return self.content
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __len__(self):
+        return 1 + len(self.content)
+
+    def add_detail(self, keyword: str, content: str):
+        self.details[keyword] = content
+
+    def detail(self, keyword):
+        if keyword in self.details:
+            return self.details[keyword]

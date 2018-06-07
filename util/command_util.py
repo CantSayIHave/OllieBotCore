@@ -64,19 +64,28 @@ def find_arg(ctx, arg: str, types: iter):
     return arg
 
 
-async def find_member(ctx, arg: str, percent):
+async def find_member(ctx, arg: str, percent, return_name=True):
     if percent > 1:
         percent = percent / 100
+
+    if percent > 1:
+        raise ValueError('`percent` must be <= 1 or <= 100')
 
     arg = arg.lower()
 
     for m in ctx.message.server.members:
         if arg in m.name.lower():
             if (len(arg) / len(m.name)) >= percent:
-                return m
+                if return_name:
+                    return m.name
+                else:
+                    return m
         elif arg in m.display_name.lower():
             if (len(arg) / len(m.display_name)) >= percent:
-                return m
+                if return_name:
+                    return m.display_name
+                else:
+                    return m
 
 
 class EmojiConverter:
@@ -129,7 +138,7 @@ def style_pfp(im: Image):
     return output
 
 
-async def extract_image(ctx: commands.Context, arg: str = None, member: str = None):
+async def extract_image(ctx: commands.Context, arg: str = None, member: str = None, in_server = None):
     base_image = None
 
     if arg:
@@ -151,6 +160,9 @@ async def extract_image(ctx: commands.Context, arg: str = None, member: str = No
 
                 base_image = await global_util.get_image(member.avatar_url)
                 base_image = style_pfp(base_image)
+            elif converted_arg == 'capture' and in_server:
+                if in_server.capture:
+                    base_image = await global_util.get_image(in_server.capture)
     else:
         if ctx.message.attachments:
             base_image = await global_util.get_image(ctx.message.attachments[0]['url'])

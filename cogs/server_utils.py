@@ -1,4 +1,5 @@
 import asyncio
+import os
 from base64 import b64encode
 
 import storage_manager as storage
@@ -7,39 +8,39 @@ from util.global_util import *
 
 # custom help dict to hold data on command accessibility
 help_args = {
-             'audioconvert': {'d': 'convert audio to different format', 'm': False},
-             'clear': {'d': 'clear bot messages', 'm': True},
-             'cat': {'d': 'summon a cat', 'm': False},
-             'b-ify': {'d': 'add some 🅱️ to text', 'm': False},
-             'bigtext': {'d': 'transform text into regional indicators', 'm': False},
-             'block': {'d': 'block any command from non-mods', 'm': True},
-             'bun': {'d': 'summon a bun', 'm': False},
-             'emotes': {'d': 'suggest server emotes to the mods', 'm': False},
-             'good': {'d': 'easy way to check if bot is online', 'm': True},
-             'getraw': {'d': 'get raw text from a message', 'm': True},
-             'imageconvert': {'d': 'convert image to different format', 'm': False},
-             'info': {'d': 'get bot info', 'm': False},
-             'music': {'d': 'manage/play music from youtube', 'm': False},
-             'perm': {'d': 'set user permissions', 'm': True},
-             'purge': {'d': 'mass-clear messages', 'm': True},
-             'playing': {'d': "set bot's 'playing' message", 'm': True},
-             'prefix': {'d': "set bot's command prefix", 'm': True},
-             'quote': {'d': 'manage/call quotes', 'm': True},
-             'react': {'d': 'react to a message with bigtext', 'm': False},
-             'reee': {'d': 'manage autistic screaming response', 'm': True},
-             'response': {'d': 'manage custom responses', 'm': True},
-             'roles': {'d': 'automate mass roll assignments', 'm': True},
-             'roll': {'d': 'dice roller', 'm': False},
-             'rss': {'d': 'manage rss feeds for each channel', 'm': True},
-             'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
-             'think': {'d': 'really makes you think', 'm': False},
-             'thinke': {'d': 'really makes you think about emotes', 'm': False},
-             'thinkpfp': {'d': 'really makes you think about pfps', 'm': False},
-             'unblock': {'d': 'unblock commands', 'm': True},
-             'usrjoin': {'d': 'manage message to new users', 'm': True},
-             'ytdl': {'d': 'youtube to mp3 converter', 'm': True},
-             'wiki': {'d': 'search Wikipedia for something', 'm': False},
-             'woof': {'d': 'summon a woof', 'm': False}}
+    'audioconvert': {'d': 'convert audio to different format', 'm': False},
+    'clear': {'d': 'clear bot messages', 'm': True},
+    'cat': {'d': 'summon a cat', 'm': False},
+    'b-ify': {'d': 'add some 🅱️ to text', 'm': False},
+    'bigtext': {'d': 'transform text into regional indicators', 'm': False},
+    'block': {'d': 'block any command from non-mods', 'm': True},
+    'bun': {'d': 'summon a bun', 'm': False},
+    'emotes': {'d': 'suggest server emotes to the mods', 'm': False},
+    'good': {'d': 'easy way to check if bot is online', 'm': True},
+    'getraw': {'d': 'get raw text from a message', 'm': True},
+    'imageconvert': {'d': 'convert image to different format', 'm': False},
+    'info': {'d': 'get bot info', 'm': False},
+    'music': {'d': 'manage/play music from youtube', 'm': False},
+    'perm': {'d': 'set user permissions', 'm': True},
+    'purge': {'d': 'mass-clear messages', 'm': True},
+    'playing': {'d': "set bot's 'playing' message", 'm': True},
+    'prefix': {'d': "set bot's command prefix", 'm': True},
+    'quote': {'d': 'manage/call quotes', 'm': True},
+    'react': {'d': 'react to a message with bigtext', 'm': False},
+    'reee': {'d': 'manage autistic screaming response', 'm': True},
+    'response': {'d': 'manage custom responses', 'm': True},
+    'roles': {'d': 'automate mass roll assignments', 'm': True},
+    'roll': {'d': 'dice roller', 'm': False},
+    'rss': {'d': 'manage rss feeds for each channel', 'm': True},
+    'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
+    'think': {'d': 'really makes you think', 'm': False},
+    'thinke': {'d': 'really makes you think about emotes', 'm': False},
+    'thinkpfp': {'d': 'really makes you think about pfps', 'm': False},
+    'unblock': {'d': 'unblock commands', 'm': True},
+    'userjoin': {'d': 'manage message to new users', 'm': True},
+    'ytdl': {'d': 'youtube to mp3 converter', 'm': True},
+    'wiki': {'d': 'search Wikipedia for something', 'm': False},
+    'woof': {'d': 'summon a woof', 'm': False}}
 
 
 class ServerUtils:
@@ -47,11 +48,11 @@ class ServerUtils:
         self.bot = bot
 
         @self.bot.command(pass_context=True)
-        async def usrjoin(ctx, arg: str = None, *, msg: str = None):
+        async def userjoin(ctx, arg: str = None, *, msg: str = None):
 
             if arg == 'help':
                 await self.bot.send_message(ctx.message.author,
-                                            "**Usrjoin usage:**\n"
+                                            "**Userjoin usage:**\n"
                                             "Get user join message: `{0}usrjoin <message>`\n"
                                             "Set user join message: `{0}usrjoin <message> [message]`\n"
                                             "Set user join output channel: `{0}usrjoin <channel> [channel]`\n\n"
@@ -197,7 +198,7 @@ class ServerUtils:
             if arg == 'help':
                 await self.bot.send_message(ctx.message.author, '**Rolemod usage:**\n'
                                                                 '`{0}perm rolemod <add/remove> [@role]`\n'
-                                                                '`{0}perm rolemod <check> [@role]`'
+                                                                '`{0}perm rolemod <check> [@role]`\n'
                                                                 '`{0}perm rolemod <list>`'.format(
                     self.bot.command_prefix))
                 return
@@ -249,8 +250,13 @@ class ServerUtils:
                                         "**Permissions usage**:\n"
                                         "`{0}perm <mod/unmod> [@mention]`\n"
                                         "`{0}perm <check> <mod> [@mention]`\n"
+                                        '`{0}perm rolemod <add/remove> [@role]`\n'
+                                        '`{0}perm rolemod <check> [@role]`\n'
+                                        '`{0}perm rolemod <list>`\n'
+                                        'Mod, unmod, or check mod status of users. Rolemod '
+                                        'allows modding of an entire role.\n'
                                         "Example: `{0}perm mod @Olliebot` or `{0}perm check mod @Olliebot`\n"
-                                        "*Note*: make sure [@mention] is a Discord-formatted blue link, "
+                                        "*Note*: make sure [@mention] or [@role] are Discord-formatted blue links, "
                                         "like {1}".format(self.bot.command_prefix, self.bot.user.mention))
 
         @self.bot.command(pass_context=True)
@@ -523,7 +529,7 @@ class ServerUtils:
                                                                 '`{0}purge [member] [message number:optional]`\n'
                                                                 'Clears a number of messages. If `member` is not \n'
                                                                 'passed, clearing is indiscriminate'.format(
-                                                                    self.bot.command_prefix))
+                    self.bot.command_prefix))
                 return
 
             elif ctx.message.server:
@@ -594,119 +600,6 @@ class ServerUtils:
                               color=0xff9000)
             await self.bot.send_message(ctx.message.author,
                                         embed=e)
-
-        """
-        @self.bot.command(pass_context=True)
-        async def help(ctx):
-            global help_args
-
-            field_limit = 10
-            high_perm = self.bot.has_high_permissions(ctx.message.author, b=self.bot)
-
-            def get_page(page_num: int, args: list):
-                limit = len(args) / field_limit
-                if int(limit) != limit:
-                    limit = int(limit + 1)
-
-                limit = int(limit)
-
-                if page_num < 1:
-                    page_num = 1
-                if page_num > limit:
-                    page_num = limit
-
-                l_start = int(field_limit * (page_num - 1))
-                if len(args) > (l_start + field_limit):
-                    page_list = args[l_start:l_start + field_limit]
-                else:
-                    page_list = args[l_start:len(args)]
-
-                em = discord.Embed(title='───────────────────────', color=0xff0000)
-                em.set_author(name='Command Help - Page {}/{}'.format(int(page_num), int(limit)),
-                              icon_url='https://abs.twimg.com/emoji/v2/72x72/2753.png')
-
-                for arg in page_list:  # type: str
-                    em.add_field(name=arg,
-                                 value=help_args[arg]['d'].capitalize(),
-                                 inline=False)
-
-                return em
-
-            sorted_args = sorted(help_args)
-
-            for arg in sorted_args[:]:
-                if not high_perm:
-                    if help_args[arg]['m']:
-                        sorted_args.remove(arg)
-
-            current_page = 1
-
-            em = get_page(current_page, sorted_args)
-
-            base_message = await self.bot.send_message(ctx.message.author, embed=em)
-            await self.bot.add_reaction(base_message, '⏮')
-            await self.bot.add_reaction(base_message, '⏪')
-            await self.bot.add_reaction(base_message, '⏩')
-            await self.bot.add_reaction(base_message, '⏭')
-            await self.bot.add_reaction(base_message, '❌')
-            await self.bot.add_reaction(base_message, 'ℹ')
-            await self.bot.wait_for_reaction('ℹ', message=base_message)
-            while True:
-                reaction, user = await self.bot.wait_for_reaction(['⏮', '⏪', '⏩', '⏭', '❌', 'ℹ'],
-                                                                  message=base_message,
-                                                                  timeout=120)
-
-                if not reaction:
-                    break
-
-                limit = len(sorted_args) / field_limit
-                if int(limit) != limit:
-                    limit = int(limit + 1)
-
-                recent_page = current_page
-
-                choice = str(reaction.emoji)
-                if choice == '⏮':
-                    current_page = 1
-                elif choice == '⏪':
-                    current_page -= 1
-                    if current_page < 1:
-                        current_page = 1
-                elif choice == '⏩':
-                    current_page += 1
-                    if current_page > limit:
-                        current_page = limit
-                elif choice == '⏭':
-                    current_page = limit
-                elif choice == '❌':
-                    await self.bot.delete_message(base_message)
-                    break
-
-                if current_page != recent_page:
-                    em = get_page(current_page, sorted_args)
-                    base_message = await self.bot.edit_message(base_message, embed=em)
-
-                if choice == 'ℹ':
-                    em = discord.Embed(title='───────────────────────', color=0xff0000)
-                    em.set_author(name='Command Help - Info',
-                                  icon_url='https://abs.twimg.com/emoji/v2/72x72/2139.png')
-
-                    out_str = 'Commands follow the format\n\n`'
-                    out_str += '{0}command <required arguments> [optional arguments]`\n\n' \
-                               'Note that `optional arguments` means an argument must be provided, ' \
-                               'but it can be anything. For example, in:\n\n' \
-                               '`{0}music <play/queue> [link/query/search number]`\n\n' \
-                               'the arguments provided in <play/queue> **must** be either `play` ' \
-                               'or `queue`, but the next argument may be either a youtube link, ' \
-                               'a query, or a search result number like so:\n\n`' + \
-                               '{0}music play https://www.youtube.com/watch?v=tVj0ZTS4WF4`\n\n' \
-                               'To learn more about the syntax of each command, call `' + \
-                               '{0}[command] help`'
-                    em.add_field(name='__Command Syntax__',
-                                 value=out_str.format(self.bot.command_prefix),
-                                 inline=False)
-
-                    await self.bot.edit_message(base_message, embed=em)"""
 
         @self.bot.group(pass_context=True)
         async def emotes(ctx):
@@ -1094,6 +987,29 @@ class ServerUtils:
             except Exception:
                 await self.bot.say('Error in formatting')
 
+        @roles.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def timeout(ctx, server):
+            timeout_role = None
+            try:
+                timeout_role = [x for x in ctx.message.server.roles if x.name.lower() == 'timeout'][0]
+            except Exception:
+                pass
+
+            if timeout_role:
+                await self.bot.say('There is already a `timeout` role present', delete_after=10)
+            else:
+                perm = discord.Permissions.general()
+                perm.speak = False
+                perm.send_messages = False
+                perm.send_tts_messages = False
+                try:
+                    await self.bot.create_role(ctx.message.server, name='timeout', permissions=perm)
+                    await self.bot.say('Created `timeout` successfully!')
+                except discord.Forbidden:
+                    await self.bot.say('I do not have sufficient permissions to make this role.', delete_after=10)
+                except discord.HTTPException:
+                    await self.bot.say('An error occurred while creating role :(', delete_after=10)
 
         @roles.command(pass_context=True)
         async def help(ctx):
@@ -1190,7 +1106,7 @@ class ServerUtils:
                     'Operation complete. Failed to change: {}'.format(', '.join([x.name for x in failures])))
 
         @self.bot.command(pass_context=True)
-        async def mute(ctx, member: discord.Member, minutes: int = None):
+        async def mute(ctx, member: discord.Member, minutes: int = 1):
             if not ctx.message.server:
                 return
 
@@ -1209,24 +1125,54 @@ class ServerUtils:
                 await self.bot.server_voice_state(member=member, mute=True)
                 schedule_future(coro=self.bot.server_voice_state(member=member, mute=False),
                                 time=(minutes * 60))
-                await self.bot.say('Voice Muted {}'.format(member.name))
+                await self.bot.say('Voice muted {}'.format(member.name))
             except discord.Forbidden:
-                await self.bot.say('I do not have sufficient permissions to do this.')
+                await self.bot.say('I do not have sufficient permissions to do this.', delete_after=10)
             except discord.HTTPException:
-                await self.bot.say('An error occurred while attempting. Please try again.')
+                await self.bot.say('An error occurred while attempting. Please try again.', delete_after=10)
 
             if timeout_role:
                 try:
                     await self.bot.add_roles(member, timeout_role)
                     schedule_future(coro=self.bot.remove_roles(member, timeout_role),
                                     time=(minutes * 60))
-                    await self.bot.say('Text Muted {}'.format(member.name))
+                    await self.bot.say('Text muted {}'.format(member.name))
                 except discord.Forbidden:
-                    await self.bot.say('I do not have sufficient permissions to do this.')
+                    await self.bot.say('I do not have sufficient permissions to do this.', delete_after=10)
                 except discord.HTTPException:
-                    await self.bot.say('An error occurred while attempting. Please try again.')
+                    await self.bot.say('An error occurred while attempting. Please try again.', delete_after=10)
             else:
-                await self.bot.say('There is no `Timeout` role to assign. Please create one to mute text features.')
+                await self.bot.say('There is no `Timeout` role to assign. Please create one to mute text features.',
+                                   delete_after=10)
+
+        @self.bot.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def unmute(ctx, server, member: discord.Member):
+            timeout_role = None
+            try:
+                timeout_role = [x for x in ctx.message.server.roles if x.name.lower() == 'timeout'][0]
+            except Exception:
+                pass
+
+            try:
+                await self.bot.server_voice_state(member=member, mute=False)
+                await self.bot.say('Voice unmuted {}'.format(member.name))
+            except discord.Forbidden:
+                await self.bot.say('I do not have sufficient permissions to do this.', delete_after=10)
+            except discord.HTTPException:
+                await self.bot.say('An error occurred while attempting. Please try again.', delete_after=10)
+
+            if timeout_role:
+                try:
+                    await self.bot.remove_roles(member, timeout_role)
+                    await self.bot.say('Text unmuted {}'.format(member.name))
+                except discord.Forbidden:
+                    await self.bot.say('I do not have sufficient permissions to do this.', delete_after=10)
+                except discord.HTTPException:
+                    await self.bot.say('An error occurred while attempting. Please try again.', delete_after=10)
+            else:
+                await self.bot.say('There is no `Timeout` role to remove. Please create one to control text muting.',
+                                   delete_after=10)
 
         @self.bot.command(pass_context=True)
         async def leavechannel(ctx, arg: str, channel: discord.Channel = None):
@@ -1238,21 +1184,17 @@ class ServerUtils:
             if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
+            if not channel:
+                channel = ctx.message.channel
+
             if arg == 'off':
                 in_server.leave_channel = None
+                await self.bot.say('Leave messages are now off.')
             elif arg == 'set' and channel:
                 in_server.leave_channel = channel.id
+                await self.bot.say('Leave messages set to channel {}'.format(channel.mention))
 
             storage.write_server_data(self.bot, in_server)
-
-            out = await self.bot.say('✅')
-            schedule_delete(self.bot, out, 5)
-
-        # @perm(type_=permissions.MOD, bot=self.bot)
-        @self.bot.command(pass_context=True)
-        async def echo(ctx, *, arg: str):
-            await self.bot.say(arg)
-
 
     @staticmethod
     def replace_color(img: Image.Image, color: int, variance: int):

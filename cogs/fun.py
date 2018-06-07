@@ -365,12 +365,18 @@ class Fun:
             await self.bot.send_message(ctx.message.channel, embed=embed)
 
         @self.bot.command(pass_context=True)
-        async def joined(ctx, member: str = None):
+        async def joined(ctx, *, member: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
             if member:
+                if len(member) > 1:
+                    if member[0] == '"':
+                        member = member[1:]
+                    if member[-1] == '"':
+                        member = member[:-1]  # remove attempted quotes from around arg
+
                 member = command_util.find_arg(ctx, member, ['member'])
                 if type(member) is not discord.Member:
                     member = await command_util.find_member(ctx, member, percent=50)
@@ -1153,43 +1159,15 @@ class Fun:
 
         @ishihara.command(pass_context=True)
         async def solve(ctx, link: str = None):
-            download_url = None
-            if link:
-                if link.startswith('http'):
-                    download_url = link
-            elif ctx.message.attachments:
-                try:
-                    download_url = ctx.message.attachments[0]['url']
-                except KeyError:
-                    pass
-
-            if not download_url and ctx.message.embeds:
-                try:
-                    download_url = ctx.message.embeds[0]['url']
-                except KeyError:
-                    pass
-
-            if not download_url:
-                await self.bot.say('Please embed and image or pass link as argument.')
-                return
 
             replace_colors = [0xE5E5C8, 0xB5B1A6, 0xBDB88D, 0xA8A48E, 0x91978E, 0x949C9D, 0xE0DBA3,
                               0xBBB964, 0xE5D67B]  # shades of green
 
-            base_image = None
+            in_server = None
+            if ctx.message.server:
+                in_server = self.bot.get_server(server=ctx.message.server)
 
-            with aiohttp.ClientSession() as session:
-                async with session.get(download_url) as resp:
-                    if resp.status == 200:
-                        try:
-                            image_bytes = await resp.read()
-                            base_image = Image.open(io.BytesIO(image_bytes))
-                            base_image = base_image.convert("RGBA")
-                        except Exception as e:
-                            print('Error in ishihara at: {}'.format(e))
-                    else:
-                        await self.bot.say('Image invalid.')
-                        return
+            base_image = await command_util.extract_image(ctx, link, in_server)
 
             def replace_method(base_image):
                 for color in replace_colors:
@@ -1216,21 +1194,10 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def hug(ctx, *, arg: str = None):
-            member_name = ''
-
             member = command_util.find_arg(ctx, arg, ['member'])
 
             if type(member) is str:
-                member = await command_util.find_member(ctx, member, percent=50)
-
-                if type(member) is discord.Member and arg:
-                    if arg.lower() in member.name.lower():
-                        member_name = member.name
-                    elif arg.lower() in member.display_name.lower():
-                        member_name = member.display_name
-
-                else:
-                    member_name = arg
+                member_name = await command_util.find_member(ctx, member, percent=50, return_name=False)
             else:
                 member_name = member.display_name
 

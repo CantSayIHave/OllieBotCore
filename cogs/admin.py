@@ -112,8 +112,8 @@ class Admin:
                 return
 
             if arg == 'set' and symbol is not None:
+                symbol = symbol.replace(' ', '').replace('\n', '')
                 self.bot.command_prefix = symbol
-                self.prefix = symbol
                 storage.write_bot_data(self.bot)
                 await self.bot.say('Set bot prefix to `{0}`'.format(symbol))
 
@@ -147,7 +147,7 @@ class Admin:
             if invite == 'this':
                 in_server = ctx.message.server
             else:
-                in_server = discord.Client.get_invite(invite)
+                in_server = discord.Client.get_invite(invite).server
 
             for se in in_bot.local_servers:
                 if se.name == in_server.server.name:
@@ -155,7 +155,7 @@ class Admin:
                                                                                      in_bot.user.name))
                     return
 
-            if in_server:
+            if in_server:  # type:discord.Server
                 s_name = in_server.name
                 s_mods = []
                 s_commands = []
@@ -171,7 +171,7 @@ class Admin:
                                              command_delay=q_delay,
                                              id=s_id))
                 storage.write_bot(in_bot)
-                await self.bot.say('Server ' + s_name + ' added to bot ' + in_bot.user.name + '!')
+                await self.bot.say('Server `{}` added to bot `{}`!'.format(s_name, in_bot.user.name))
 
         @server.command(pass_context=True)
         async def rename(ctx, to_name: str, new_name: str):
@@ -186,7 +186,7 @@ class Admin:
             server_target = self.bot.get_server(name=to_name)
 
             if server_target is None:
-                await self.bot.say('Server {} does not exist'.format(to_name))
+                await self.bot.say('Server `{}` does not exist'.format(to_name))
                 return
 
             # if renaming an old server to a new, delete new version
