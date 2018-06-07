@@ -5,9 +5,12 @@
 
 import random
 
+import asyncio
 import discord
+import time
 
 from util.containers import EmbedField
+from util import global_util
 
 
 class Option:
@@ -16,7 +19,7 @@ class Option:
     Attributes
     ----------
     button : str
-        unicode emoji for display. must be a support default discord emoji
+        unicode emoji for display. must be a supported default discord emoji
     content : :class:`EmbedField`
         page content to be displayed when button is called
 
@@ -35,13 +38,43 @@ class Option:
 
 async def paginate(items,
                    title: str,
-                   bot,  # DiscordBot
+                   bot,
                    destination,
+                   author,
                    page_limit=10,
                    timeout=60,
                    extra_options: list = None,
                    icon=None,
                    color=None):
+
+    """Breaks a list of options into numbered pages for display in `_paginator`
+
+        Parameters
+        ----------
+        items : collections.Iterable
+            iterable of items to paginate
+        title : str
+            title for each page
+        bot : discordbot.DiscordBot
+            discord bot
+        destination : discord.Channel
+            channel to send pagination to
+        author : discord.User
+            user to take reactions from
+        page_limit : int
+            items allowed per page
+        timeout : int
+            timeout for reaction input
+        extra_options : list[Option]
+            list of extra options to display next to basic buttons
+        icon : str
+            icon for embed, if available
+        color : int
+            color for embed, if available
+
+        """
+
+    entry_time = time.time()  # used for listening failsafe
 
     items = list(items)  # for generators and other iterables
 
@@ -112,8 +145,8 @@ async def paginate(items,
 
         for field in page_list:  # type:EmbedField
             em.add_field(name=field.name,
-                        value=field.value,
-                        inline=field.inline)
+                         value=field.value,
+                         inline=field.inline)
 
         return em
 
@@ -153,14 +186,22 @@ async def paginate(items,
         try:
             reaction, user = await bot.wait_for_reaction(reactions,
                                                          message=base_message,
-                                                         timeout=timeout)
-        except Exception:
+                                                         timeout=timeout,
+                                                         user=author)
+        except asyncio.TimeoutError:
             for r in reactions:
                 await bot.remove_reaction(base_message, r, bot.user)
             break
+        except Exception as e:
+            await bot.send_message(discord.User(id=global_util.OWNER_ID), 'Paginator Except: {}'.format(e))
 
         if not reaction:
-            break
+            if (time.time() - entry_time) > (timeout - 10):
+                break
+            else:
+                continue
+
+        entry_time = time.time()
 
         recent_page = current_page
 
@@ -170,11 +211,11 @@ async def paginate(items,
         elif choice == '⏪':
             current_page -= 1
             if current_page < 1:
-                current_page = 1
+                current_page = limit
         elif choice == '⏩':
             current_page += 1
             if current_page > limit:
-                current_page = limit
+                current_page = 1
         elif choice == '⏭':
             current_page = limit
         elif choice == '❌':
@@ -195,5 +236,3 @@ async def paginate(items,
                          inline=field.inline)
 
             await bot.edit_message(base_message, embed=em)
-
-
