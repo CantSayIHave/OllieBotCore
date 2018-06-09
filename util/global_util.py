@@ -249,6 +249,8 @@ def_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 # -----------
 CHAR_ZWS = chr(0x200B)
 
+TITLE_BAR = '───────────────────────'
+
 TIME_RESPONSE_EXIT = 300  # in seconds
 
 TIME_RSS_LOOP = 70  # in seconds
