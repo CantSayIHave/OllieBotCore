@@ -142,3 +142,6 @@ class HelpForm:
     def detail(self, keyword):
         if keyword in self.details:
             return self.details[keyword]
+
+    def format(self, *args, **kwargs):
+        return self.content.format(*args, **kwargs)
