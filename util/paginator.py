@@ -6,6 +6,8 @@
 import random
 
 import asyncio
+
+import collections
 import discord
 import time
 
@@ -55,6 +57,8 @@ class Paginator:
         self.item_limit = item_limit
         self.icon = icon
         self.color = color
+
+        self.index = -1
 
         if not color:
             self.color = random.randint(0, 0xffffff)
@@ -112,6 +116,16 @@ class Paginator:
 
         return em
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.index += 1
+        if self.index >= len(self):
+            self.index = -1
+            raise StopIteration
+        return self[self.index]
+
     def base_embed(self) -> discord.Embed:
         em = discord.Embed(title='───────────────────────', color=self.color)
 
@@ -144,7 +158,7 @@ class Option:
         return "Option:{}".format(self.button)
 
 
-async def paginate(items: list,
+async def paginate(items,
                    title: str,
                    bot,
                    destination,
@@ -182,6 +196,8 @@ async def paginate(items: list,
             color for embed, if available
 
         """
+
+    items = list(items)
 
     paginator = Paginator(items=items, title=title, item_limit=item_limit, icon=icon, color=color)
 
