@@ -16,7 +16,7 @@ from util import global_util
 
 
 class Pages:
-    def __init__(self, pages=[], icon=None, color=None):
+    def __init__(self, pages, icon=None, color=None):
         """Stores a list of embeds to display
 
         Parameters
@@ -49,6 +49,7 @@ class Pages:
 
     def __iadd__(self, other):
         self.add_page(other)
+        return self
 
     def base_embed(self) -> discord.Embed:
         em = discord.Embed(title='───────────────────────', color=self.color)
