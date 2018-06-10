@@ -186,7 +186,9 @@ def extract_filename(path):
 
 
 # i forgot what non-builtin attributes are called so it's "new"
-def get_new_attr(thing):
+def get_new_attr(thing, check=None):
+    if check:
+        return (x for x in thing.__dict__ if not x.startswith('__') and check(getattr(thing, x)))
     return (x for x in thing.__dict__ if not x.startswith('__'))
 
 
