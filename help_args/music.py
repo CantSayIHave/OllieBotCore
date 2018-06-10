@@ -1,5 +1,6 @@
 from util.containers import HelpForm as form
 
+
 music = form('`{0}music <play/queue> [youtube link/search query/search result #]`\n'
              '`{0}music <queue> <clear/list>`\n'
              '`{0}music <search> [search query]`\n'
@@ -32,3 +33,5 @@ music = form('`{0}music <play/queue> [youtube link/search query/search result #]
              '`disconnect:    d`\n'
              '`current:       c`\n\n'
              "Example: `{0}music p home resonance`\n")
+
+music.add_tagline('play music from YouTube')

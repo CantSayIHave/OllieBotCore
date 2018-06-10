@@ -3,8 +3,14 @@ from util.containers import HelpForm as form
 audioconvert = form('`{}audioconvert [new filetype] [link]`\n'
                     'Converts an audio file to requested filetype.')
 
+audioconvert.add_tagline('convert audio to a different type')
+
+
 imageconvert = form('`{}imgconvert [new filetype] (embed image)`\n'
                     'Converts an image to requested filetype.')
+
+imageconvert.add_tagline('convert an image to a different type')
+
 
 getraw = form('`{0}getraw [message id]`\n'
               '`{0}getraw [channel id] [message id]`\n'
@@ -12,11 +18,18 @@ getraw = form('`{0}getraw [message id]`\n'
               'to capture `:id:` formatted emoji. If `channel_id` '
               'is not provided, current channel will be used.')
 
+getraw.add_tagline('get the raw string from a message')
+
+
 nick_all = form('`{0}nick-all [new name]`\n'
                 '`{0}nick-all <reset>`\n'
                 'Change the nickname of everyone on the server to '
                 '`new name`. Because why not.\n'
                 'Using `reset` will remove all nicknames again.')
+
+nick_all.add_tagline('change the nickname of everyone in the server to something')
+nick_all.high_perm = True
+
 
 photoshop = form('`{0}photoshop <mask>`\n'
                  '`{0}photoshop <backgrounds>`\n'
@@ -63,3 +76,5 @@ photoshop.add_detail(keyword='capture',
                              'command.\n\n'
                              'The argument `number` is the image number in the '
                              'channel, counting up from most recent as 1.')
+
+photoshop.add_tagline('photo tools for images')
