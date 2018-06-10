@@ -323,6 +323,11 @@ class DiscordBot(commands.Bot):
         if self.check_admin(user):
             return True
 
+        if type(user) is discord.Member:
+            server_perm = user.server_permissions  # type:discord.Permissions
+            if server_perm.administrator:
+                return True
+
         check_servers = []
 
         if server:
