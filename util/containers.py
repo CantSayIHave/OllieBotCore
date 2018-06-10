@@ -126,6 +126,8 @@ class HelpForm:
     def __init__(self, content: str):
         self.content = content
         self.details = {}
+        self._tagline = ''
+        self.high_perm = False
 
     def __str__(self):
         return self.content
@@ -139,9 +141,23 @@ class HelpForm:
     def add_detail(self, keyword: str, content: str):
         self.details[keyword] = content
 
-    def detail(self, keyword):
+    def detail(self, keyword) -> str:
         if keyword in self.details:
             return self.details[keyword]
 
     def format(self, *args, **kwargs):
         return self.content.format(*args, **kwargs)
+
+    def add_tagline(self, content: str):
+        self._tagline = content
+
+    @property
+    def tagline(self):
+        if self._tagline:
+            return self._tagline
+        else:
+            return ''
+
+    @tagline.setter
+    def tagline(self, content):
+        self._tagline = content
