@@ -185,6 +185,11 @@ def extract_filename(path):
     return path
 
 
+# i forgot what non-builtin attributes are called so it's "new"
+def get_new_attr(thing):
+    return (x for x in thing.__dict__ if not x.startswith('__'))
+
+
 # time in seconds
 def schedule_delete(bot, msg, time: int):
     delete_queue.append(DeleteMessage(message=msg, bot=bot, timer=time))
