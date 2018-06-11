@@ -97,17 +97,6 @@ class Help:
                 await send_help(self.bot, ctx.message.author, command, detail)
                 return
 
-            def list_help(args, high_perm):
-                for arg in args:  # type: str
-                    if help_args.help_taglines[arg]['m'] and high_perm:
-                        yield EmbedField(name=arg,
-                                         value=help_args.help_taglines[arg]['d'].capitalize(),
-                                         inline=False)
-                    elif not help_args.help_taglines[arg]['m']:
-                        yield EmbedField(name=arg,
-                                         value=help_args.help_taglines[arg]['d'].capitalize(),
-                                         inline=False)
-
             info = 'Commands follow the format\n\n`'
             info += '{0}command <required arguments> [optional arguments]`\n\n' \
                     'Note that `optional arguments` means an argument must be provided, ' \
@@ -124,16 +113,17 @@ class Help:
                                            content=EmbedField(name="__Command Syntax__:",
                                                               value=info.format(self.bot.command_prefix)))
 
-            await paginator.paginate(items=list_help(args=sorted(help_args),
-                                               high_perm=self.bot.has_high_permissions(ctx.message.author)),
-                                     title='Command Help',
-                                     bot=self.bot,
-                                     destination=ctx.message.author,
-                                     author=ctx.message.author,
-                                     timeout=120,
-                                     extra_options=[info_option],
-                                     icon='https://abs.twimg.com/emoji/v2/72x72/2753.png',
-                                     color=0xff0000)
+            if self.bot.has_high_permissions(ctx.message.author):
+                pages = self.bot.help_mod
+            else:
+                pages = self.bot.help_all
+
+            await paginator.display(pages=pages,
+                                    bot=self.bot,
+                                    destination=ctx.message.author,
+                                    author=ctx.message.author,
+                                    timeout=30,
+                                    extra_options=[info_option])
 
 async def intercept_help(message: discord.Message, bot):
     if not message.content:
