@@ -9,7 +9,7 @@ from discord.ext import commands
 
 import server
 import storage_manager as storage
-from cogs import responses, sense
+from cogs import responses, sense, help
 from util import global_util
 
 """
@@ -52,6 +52,8 @@ class DiscordBot(commands.Bot):
         self.debug_timer = None
 
         self._cogs = []  # hold cog instances
+
+        self.help_all , self.help_mod = help.build_menus(self)
 
         @self.event  # ---------------------- Main Message Entry ---------------------- #
         async def on_message(message):
