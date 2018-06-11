@@ -49,16 +49,16 @@ music redo
 sound converters
 add bot shutdown and restart (eh)
 cdn
+fix strawpoll
+virtalenv
+cat
+boop
 
 TODO:
-boop
 cuddle
-cat
 
 rss server
 message freq stats
-virtalenv
-fix strawpoll
 RemindMe (maybe)
 command control (maybe) (kinda did)
 
