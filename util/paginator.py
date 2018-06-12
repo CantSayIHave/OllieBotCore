@@ -44,6 +44,9 @@ class Pages:
     def __getitem__(self, item):
         return self.pages[item]
 
+    def __iter__(self):
+        return self.pages.__iter__()
+
     def add_page(self, page):
         self.pages.append(page)
 
@@ -67,8 +70,6 @@ class Paginator:
         self.item_limit = item_limit
         self.icon = icon
         self.color = color
-
-        self.index = -1
 
         if not color:
             self.color = random.randint(0, 0xffffff)
@@ -127,14 +128,10 @@ class Paginator:
         return em
 
     def __iter__(self):
-        return self
-
-    def __next__(self):
-        self.index += 1
-        if self.index >= len(self):
-            self.index = -1
-            raise StopIteration
-        return self[self.index]
+        i = 0
+        while i < len(self):
+            yield self[i]
+            i += 1
 
     def base_embed(self) -> discord.Embed:
         em = discord.Embed(title='───────────────────────', color=self.color)
