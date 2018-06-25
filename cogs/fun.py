@@ -1160,22 +1160,36 @@ class Fun:
         @ishihara.command(pass_context=True)
         async def solve(ctx, link: str = None):
 
-            replace_colors = [0xE5E5C8, 0xB5B1A6, 0xBDB88D, 0xA8A48E, 0x91978E, 0x949C9D, 0xE0DBA3,
-                              0xBBB964, 0xE5D67B]  # shades of green
-
             in_server = None
             if ctx.message.server:
                 in_server = self.bot.get_server(server=ctx.message.server)
 
             base_image = await command_util.extract_image(ctx, link, in_server)
 
-            def replace_method(base_image):
+            colors = self.get_colors(base_image, 40)
+            replace_colors = []
+            for c in colors:
+                if not self.color_compare(c, (0, 0, 0, 0), 20) and not self.color_compare(c, (255, 255, 255, 255), 20):
+                    present = False
+                    for pc in replace_colors:
+                        if self.color_compare(pc, c, 50):
+                            present = True
+                    if not present:
+                        replace_colors.append(c)
+
+            def replace_method(base_image, tol=30):
                 for color in replace_colors:
-                    replace_color(base_image, color, 0x000000, 15)
+                    replace_color(base_image, self.color_int(color), 0x000000, tol)
 
             if base_image:
+                await self.bot.say('Tolerance? Default is 30.')
+                m = await self.bot.wait_for_message(timeout=30, author=ctx.message.author, channel=ctx.message.channel)
+                if is_num(m.content):
+                    tol = int(m.content)
+                else:
+                    tol = 30
                 try:
-                    await self.bot.loop.run_in_executor(def_executor, lambda: replace_method(base_image))
+                    await self.bot.loop.run_in_executor(def_executor, lambda: replace_method(base_image, tol))
 
                     base_image.save('solved.png', format='PNG')
 
@@ -1525,7 +1539,42 @@ class Fun:
 
             return image
 
+    @staticmethod
+    def color_compare(a, b, tol):
+        if abs(a[0] - b[0]) <= tol:
+            if abs(a[1] - b[1]) <= tol:
+                if abs(a[2] - b[2]) <= tol:
+                    return True
+        return False
 
+    def get_colors(self, im, tolerance=5):
+        colors = []
+        im = im.resize((150, 150))
+        data = im.load()
+        colors.append(data[0, 0])
+        for y in range(im.size[1]):
+            for x in range(im.size[0]):
+                color = data[x, y]
+                present = False
+                for c in colors:
+                    if self.color_compare(c, color, tolerance):
+                        present = True
+                        break
+                if not present:
+                    colors.append(color)
+        return colors
+
+    @staticmethod
+    def color_tuple(c_hex: int):
+        alpha = (c_hex & 0xff000000) >> 24
+        red = (c_hex & 0xff0000) >> 16
+        green = (c_hex & 0xff00) >> 8
+        blue = c_hex & 0xff
+        return red, green, blue, alpha
+
+    @staticmethod
+    def color_int(c_tuple: tuple):
+        return (c_tuple[3] << 24) | (c_tuple[0] << 16) | (c_tuple[1] << 8) | c_tuple[2]
 
 
 def setup(bot):
