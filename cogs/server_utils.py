@@ -5,6 +5,7 @@ from base64 import b64encode
 import storage_manager as storage
 from discordbot import DiscordBot
 from util.global_util import *
+import util.command_util as command_util
 
 # custom help dict to hold data on command accessibility
 help_args = {
@@ -194,7 +195,7 @@ class ServerUtils:
                     await self.bot.say('{} is *not* a mod'.format(member.mention))
 
         @perm.command(pass_context=True)
-        async def rolemod(ctx, arg: str, role: discord.Role = None):
+        async def rolemod(ctx, arg: str, role: str = None):
             if arg == 'help':
                 await self.bot.send_message(ctx.message.author, '**Rolemod usage:**\n'
                                                                 '`{0}perm rolemod <add/remove> [@role]`\n'
@@ -223,23 +224,34 @@ class ServerUtils:
                 await self.bot.send_message(ctx.message.channel, embed=em)
                 return
 
+            elif arg == 'clear':
+                in_server.rolemods.clear()
+                storage.write_server_data(self.bot, in_server)
+                await self.bot.say('Cleared rolemods.')
+                return
+
+            role = command_util.find_arg(ctx, role, ('role',))
+
+            if isinstance(role, str):
+                role = await command_util.find_role(ctx, role, 50)
+
             if role:
                 if arg == 'add':
                     in_server.rolemods.append(role.id)
                     storage.write_server_data(self.bot, in_server)
-                    await self.bot.say('Added role ' + role.mention + ' to role mod list')
+                    await self.bot.say('Added role {} to role mod list'.format(role.mention))
                 elif arg == 'remove':
                     if role.id in in_server.rolemods:
                         in_server.rolemods.remove(role.id)
                         storage.write_server_data(self.bot, in_server)
-                        await self.bot.say('Removed role ' + role.mention + ' from role mod list')
+                        await self.bot.say('Removed role {} from role mod list'.format(role.mention))
                     else:
-                        await self.bot.say('Role ' + role.mention + ' is not on the role mod list')
+                        await self.bot.say('Role {} is not on the role mod list'.format(role.mention))
                 elif arg == 'check':
                     if role.id in in_server.rolemods:
-                        await self.bot.say('Role ' + role.mention + ' *is* on the mod list')
+                        await self.bot.say('Role {} *is* on the mod list'.format(role.mention))
                     else:
-                        await self.bot.say('Role ' + role.mention + ' *is not* on the mod list')
+                        await self.bot.say('Role {} *is not* on the mod list'.format(role.mention))
 
         @perm.command(pass_context=True)
         async def help(ctx):
