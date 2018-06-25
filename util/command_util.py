@@ -88,6 +88,21 @@ async def find_member(ctx, arg: str, percent, return_name=True):
                     return m
 
 
+async def find_role(ctx, arg: str, percent) -> discord.Role:
+    if percent > 1:
+        percent = percent / 100
+
+    if percent > 1:
+        raise ValueError('`percent` must be <= 1 or <= 100')
+
+    arg = arg.lower()
+
+    for role in ctx.message.server.roles:  # type: discord.Role
+        if arg in role.name.lower():
+            if (len(arg) / len(role.name)) >= percent:
+                return role
+
+
 class EmojiConverter:
     def __init__(self, ctx, arg):
         self.ctx = ctx
