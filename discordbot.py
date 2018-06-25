@@ -53,7 +53,7 @@ class DiscordBot(commands.Bot):
 
         self._cogs = []  # hold cog instances
 
-        self.help_all , self.help_mod = help.build_menus(self)
+        self.help_all, self.help_mod = help.build_menus(self)
 
         @self.event  # ---------------------- Main Message Entry ---------------------- #
         async def on_message(message):
@@ -61,6 +61,10 @@ class DiscordBot(commands.Bot):
 
             # bot should not read own or other bot messages
             if message.author == self.user or message.author.bot:
+                return
+
+            # cant have be a command without content ¯\_(ツ)_/¯
+            if not message.content:
                 return
 
             if message.author.id == '340747290849312768':  # eggy
@@ -84,6 +88,11 @@ class DiscordBot(commands.Bot):
 
             # Avoid server-related content if in direct message
             if not message.server:
+
+                message.content = self.map_commands(self.char_swaps(message.content))
+
+                await help.intercept_help(message, self)
+
                 # treat all commands as lowercase
                 message.content = self.command_lowercase(message.content)
 
@@ -104,6 +113,8 @@ class DiscordBot(commands.Bot):
                 return
 
             message.content = self.map_commands(self.char_swaps(message.content))
+
+            await help.intercept_help(message, self)  # intercept help
 
             content_lower = message.content.lower()  # type: str
 
