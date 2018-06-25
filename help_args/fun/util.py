@@ -35,8 +35,6 @@ eight_ball.add_tagline('ask the eight ball something')
 
 ishihara = form('`{0}ishihara solve [image]`\n'
                 'Solves ishihara colorblind tests.\n'
-                'Currently only supports green/orange, more colors '
-                'coming soon.\n'
                 'You may provide the image in any way you like.')
 
 ishihara.add_tagline('solve colorblind tests')
