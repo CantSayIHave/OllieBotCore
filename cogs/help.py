@@ -1,14 +1,16 @@
+import random
+
 import discord
 from discord.ext import commands
 
 from util.containers import *
 from util import paginator
 from util import global_util
-from discordbot import DiscordBot
 import help_args
 
 
 help_icon = 'https://abs.twimg.com/emoji/v2/72x72/2753.png'
+error_icon = 'https://abs.twimg.com/emoji/v2/72x72/274c.png'
 
 all_profile = {'mod': False,
                'pages': (('fun', 'images'),
@@ -33,7 +35,7 @@ mod_profile = {'mod': True,
                'color': 0xff0000}
 
 
-def build_page(bot: DiscordBot, section: str, subsec: str = None, mod=True, page_on=1, page_total=1):
+def build_page(bot, section: str, subsec: str = None, mod=True, page_on=1, page_total=1):
     em = discord.Embed(title=global_util.TITLE_BAR, color=0xff0000)
     if subsec:
         em.set_author(name='Command Help (Page {}/{}): {} - {}'.format(page_on,
@@ -49,12 +51,12 @@ def build_page(bot: DiscordBot, section: str, subsec: str = None, mod=True, page
 
     if subsec:
         parent_mod = getattr(help_args, section)
-        mod = getattr(parent_mod, subsec)
+        _mod = getattr(parent_mod, subsec)
     else:
-        mod = getattr(help_args, section)
+        _mod = getattr(help_args, section)
 
-    for command in global_util.get_new_attr(mod, check=lambda x: type(x) is HelpForm):
-        form = getattr(mod, command)  # type:HelpForm
+    for command in global_util.get_new_attr(_mod, check=lambda x: type(x) is HelpForm):
+        form = getattr(_mod, command)  # type:HelpForm
         if form.high_perm:
             if mod:
                 em.add_field(name='{}{}'.format(bot.command_prefix, command),
@@ -68,7 +70,7 @@ def build_page(bot: DiscordBot, section: str, subsec: str = None, mod=True, page
     return em
 
 
-def build_menu(bot: DiscordBot, profile: dict):
+def build_menu(bot, profile: dict):
     mod = profile['mod']
     pages = profile['pages']
     total = len(pages)
@@ -80,7 +82,7 @@ def build_menu(bot: DiscordBot, profile: dict):
     return menu
 
 
-def build_menus(bot: DiscordBot):
+def build_menus(bot):
     all_help = build_menu(bot, all_profile)
     mod_help = build_menu(bot, mod_profile)
 
@@ -88,7 +90,7 @@ def build_menus(bot: DiscordBot):
 
 
 class Help:
-    def __init__(self, bot: DiscordBot):
+    def __init__(self, bot):
         self.bot = bot
 
         @self.bot.command(pass_context=True)
@@ -148,21 +150,40 @@ async def intercept_help(message: discord.Message, bot):
     return False
 
 
-async def send_help(bot: DiscordBot, author: discord.User, command: str, detail=None):
-    form = getattr(help_args, command, default=None)  # type:HelpForm
+async def send_help(bot, author: discord.User, command: str, detail=None):
+    form = getattr(help_args, command, None)  # type:HelpForm
 
     if form:
         if detail:
             if form.detail(detail):
                 help_message = form.detail(detail).format(bot.command_prefix, bot.user.mention)
+                color = random.randint(0, 0xffffff)
+                name = '{}{} {}'.format(bot.command_prefix, command, detail)
+                icon = help_icon
             else:
                 help_message = 'Command `{}` doesn\'t have a detail named `{}`'.format(command, detail)
+                color = 0xff0000
+                name = 'Help Error'
+                icon = error_icon
+
         else:
             help_message = form.format(bot.command_prefix, bot.user.mention)
+            name = '{}{}'.format(bot.command_prefix, command)
+            color = random.randint(0, 0xffffff)
+            icon = help_icon
+
+
+
     else:
         help_message = 'Command `{}` has no help documentation or does not exist.'.format(command)
+        name = 'Help Error'
+        color = 0xff0000
+        icon = error_icon
 
-    await bot.send_message(author, help_message)
+    em = discord.Embed(title=global_util.TITLE_BAR, description=help_message, color=color)
+    em.set_author(name=name, icon_url=icon)
+
+    await bot.send_message(author, embed=em)
 
 
 def setup(bot):
