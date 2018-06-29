@@ -221,6 +221,11 @@ def global_save(func):
     return decorator
 
 
+# str.split but an iter
+def split_iter(string, include: str = ''):
+    return (x.group(0) for x in re.finditer(r"[A-Za-z0-9{}']+".format(include), string))
+
+
 exit_timer = 0
 
 out_messages = deque([])  # for proxy message delivery system

@@ -8,6 +8,7 @@ from PIL import ImageDraw, ImageFont
 from pydub import AudioSegment
 from wikipedia import DisambiguationError
 from wikipedia import PageError
+import pyfiglet
 
 import storage_manager as storage
 from apis.strawpoll import *
@@ -27,6 +28,8 @@ num2regional = {0: '0⃣',
                 9: '9⃣',}
 
 regional2num = {v: k for k, v in num2regional.items()}
+
+fig_fonts = pyfiglet.FigletFont.getFonts()
 
 
 class Fun:
@@ -1408,6 +1411,26 @@ class Fun:
         @self.bot.command(pass_context=True)
         async def colour(ctx, *, arg: str = None):
             await self.bot.say('Oopsie! Looks like you misspelled **color** 😄')
+
+        @self.bot.command(pass_context=True)
+        async def textart(ctx, *, arg: str):
+
+            font = 'standard'
+            for word in global_util.split_iter(arg, '=:'):
+                if word.startswith(('font=', 'font:')):
+                    arg = arg.replace(word, '')
+                    font = word.replace('font=', '').replace('font:', '')
+
+                    if font not in fig_fonts:
+                        await self.bot.say('No font `{}` exists!'.format(font), delete_after=5)
+                        font = 'standard'
+
+                    break
+
+            if len(arg) > 40:
+                arg = arg[:40]
+
+            await self.bot.say('```\n{}\n```'.format(pyfiglet.figlet_format(arg, font=font)))
 
     @staticmethod
     def is_num(text: str):
