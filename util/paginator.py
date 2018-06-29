@@ -4,6 +4,7 @@
 # paginates through an iterable of embed fields
 
 import random
+import traceback
 
 import asyncio
 
@@ -285,7 +286,7 @@ async def display(pages,
                 await bot.remove_reaction(base_message, r, bot.user)
             break
         except Exception as e:
-            await bot.send_message(discord.User(id=global_util.OWNER_ID), 'Paginator Except: {}'.format(e))
+            raise
 
         if not reaction:
             if (time.time() - entry_time) > (timeout - 10):
@@ -299,7 +300,7 @@ async def display(pages,
 
         choice = str(reaction.emoji)
         if choice == '⏮':
-            current_page = 1
+            current_page = 0
         elif choice == '⏪':
             current_page -= 1
             if current_page < 0:
@@ -315,7 +316,7 @@ async def display(pages,
             break
 
         if current_page != recent_page:
-            base_message = await bot.edit_message(base_message, embed=current_page)
+            base_message = await bot.edit_message(base_message, embed=pages[current_page])
 
         if choice in extra_reactions:
             field = [x.content for x in extra_options if x.button == choice][0]

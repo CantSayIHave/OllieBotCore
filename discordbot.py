@@ -198,6 +198,8 @@ class DiscordBot(commands.Bot):
             if not in_server.leave_channel:
                 return
 
+            print('Leave event on {}'.format(in_server.name))
+
             out_msg = '**{}** has left the server. Goodbye! <:pinguwave:415782912278003713>'.format(member.name)
 
             await self.send_message(discord.Object(id=in_server.leave_channel), out_msg)
