@@ -6,6 +6,7 @@ from discordbot import DiscordBot
 from server import Server
 from util import global_util
 from util.global_util import *
+import util.scheduler as scheduler
 
 
 class Admin:

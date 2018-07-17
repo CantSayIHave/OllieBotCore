@@ -1,5 +1,18 @@
 from util.containers import HelpForm as form
 
+birthday = form('`{0}birthday <add/edit> [@user] [date]`\n'
+                '`{0}birthday <remove> [@user]`\n'
+                '`{0}birthday <get> [user/date]`\n'
+                'Add a birthday for the bot to monitor. Birthday '
+                'notifications will be dispatched at 12am PST each date.\n'
+                '*Note:* `date` *may be given in any recognizable format*\n'
+                'Examples:\n'
+                '`{0}birthday add `{1}` july 15`\n'
+                '`{0}birthday edit `{1}` tomorrow`\n'
+                '`{0}birthday get july 15`')
+
+birthday.add_tagline('manage member birthday notifications')
+
 block = form('`{0}block <all/here> [command]`\n'
              '`{0}block [#channel] [command]`\n'
              '`{0}block <list>`\n'
@@ -138,9 +151,9 @@ unmute = form('`{0}unmute [@member]`\n'
 unmute.add_tagline('unmute a member')
 unmute.high_perm = True
 
-userjoin = form("Get user join message: `{0}usrjoin <message>`\n"
-                "Set user join message: `{0}usrjoin <message> [message]`\n"
-                "Set user join output channel: `{0}usrjoin <channel> [channel]`\n\n"
+userjoin = form("Get user join message: `{0}userjoin <message>`\n"
+                "Set user join message: `{0}userjoin <message> [message]`\n"
+                "Set user join output channel: `{0}userjoin <channel> [channel]`\n\n"
                 "The user join message may be formatted with an `@u` as a placeholder "
                 "for the new member.\n"
                 "For example: `Welcome to the server, @u!` displays as:\n"

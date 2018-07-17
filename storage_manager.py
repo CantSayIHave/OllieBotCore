@@ -4,7 +4,7 @@ import os
 
 import discordbot
 from server import Server
-from util import global_util
+from util import global_util, command_util
 from util.containers import *
 
 with open('globals/admins.json', 'r') as f:
@@ -53,6 +53,32 @@ except FileNotFoundError:
         json.dump([], pats_out)
         pats_out.close()
         global_util.pat_library = []
+
+
+# anonymous object for storage
+class GenericStorage:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+# for serializing complex objects
+def serialize(obj):
+    if isinstance(obj, discord.User):
+        return GenericStorage(username=obj.name,
+                              id=obj.id,
+                              discriminator=obj.discriminator,
+                              avatar=obj.avatar,
+                              bot=obj.bot).__dict__
+    if isinstance(obj, Birthday):
+        return GenericStorage(user=serialize(obj.user), dt=obj.dt.strftime(global_util.DATETIME_FORMAT)).__dict__
+
+
+def deserialize(obj: dict, baseclass):
+    if baseclass is Birthday:
+        return Birthday(user=deserialize(obj['user'], discord.User),
+                        dt=datetime.strptime(obj['dt'], global_util.DATETIME_FORMAT))
+    elif baseclass is discord.User:
+        return baseclass(**obj)
 
 
 def load_bot(bot_name: str):  # -> discordbot.DiscordBot
@@ -105,6 +131,12 @@ def load_bot(bot_name: str):  # -> discordbot.DiscordBot
             with open('bots/{}/{}/responses.json'.format(bot_name, s_name), 'r') as fi:
                 s_responses = json.load(fi)
 
+            s_birthdays = []
+            if global_util.file_exists('bots/{}/{}/birthdays.json'.format(bot_name, s_name)):
+                with open('bots/{}/{}/birthdays.json'.format(bot_name, s_name), 'r') as fi:
+                    raw_birthdays = json.load(fi)
+                    s_birthdays = [deserialize(x, Birthday) for x in raw_birthdays]
+
             server_list.append(Server(name=s_name,
                                       mods=s_mods,
                                       commands=s_commands,
@@ -120,7 +152,8 @@ def load_bot(bot_name: str):  # -> discordbot.DiscordBot
                                       responses=s_responses,
                                       queue=s_queue,
                                       music_chat=s_music_chat,
-                                      leave_channel=s_leave_channel))  # Server Build
+                                      leave_channel=s_leave_channel,
+                                      birthdays=s_birthdays))  # Server Build
 
         print('Loaded bot {}'.format(bot_name))
         return discordbot.DiscordBot(name=bot_name,
@@ -309,6 +342,8 @@ def write_bot(b):
 
             json.dump(s_music, fi)
 
+        write_birthdays(b, s)
+
 
 @global_util.global_save
 def write_bot_names(bots: list):
@@ -327,3 +362,11 @@ def write_rss(b, s):
             s_rss = {'rss': [x.__dict__ for x in s.rss]}
 
             json.dump(s_rss, fi)
+
+
+@global_util.global_save
+def write_birthdays(b, s):
+    with open('bots/{}/{}/birthdays.json'.format(b.name, s.name), 'w') as fi:
+        b_days = [serialize(x) for x in s.birthdays]
+
+        json.dump(b_days, fi)

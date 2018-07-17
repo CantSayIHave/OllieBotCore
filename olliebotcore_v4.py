@@ -6,6 +6,7 @@ from discordbot import DiscordBot
 from server import Server
 from util import global_util
 from util.global_util import *
+import util.scheduler as scheduler
 
 random.seed()
 
@@ -241,6 +242,7 @@ bots.run_all(loop)
 
 loop.create_task(twitch.initialize())  # async library requires init
 loop.create_task(delete_messages())
+loop.create_task(scheduler.task_loop())  # datetime callback scheduling
 
 try:
     loop.run_until_complete(background_async())

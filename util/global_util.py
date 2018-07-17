@@ -3,7 +3,7 @@ import io
 import json
 import re
 import shlex
-from collections import deque
+from collections import deque, OrderedDict
 
 import twitter
 from PIL import Image
@@ -148,6 +148,7 @@ async def get_json(page: str) -> dict:
                 d = await resp.json()
                 return d
 
+
 async def get_image(url: str):
     try:
         with aiohttp.ClientSession() as session:
@@ -212,18 +213,34 @@ save_in_progress = False
 
 # save_in_progress decorator
 def global_save(func):
-
     def decorator(*args, **kwargs):
         global save_in_progress
         save_in_progress = True
         func(*args, **kwargs)
         save_in_progress = False
+
     return decorator
 
 
 # str.split but an iter
 def split_iter(string, include: str = ''):
     return (x.group(0) for x in re.finditer(r"[A-Za-z0-9{}']+".format(include), string))
+
+
+# slice an `OrderedDict`
+def od_slice(od, fr=0, to=0):
+    if not to:
+        to = len(od)
+    desired = list(od)[fr:to]
+    return OrderedDict((k, od[k]) for k in desired)
+
+
+def file_exists(filepath: str):
+    try:
+        open(filepath, 'r').close()
+        return True
+    except:
+        return False
 
 
 exit_timer = 0
@@ -275,6 +292,8 @@ OWNER_ID = '305407800778162178'
 
 MUSIC_QUEUE_LIMIT = 50
 
+DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
+
 with open('resources/emoji_alphabet.json', 'r', encoding='utf8') as f:
     emoji_alphabet = json.load(f)
 
@@ -313,10 +332,8 @@ music_commands = {'cq': 'queue clear',
                   'sh': 'shuffle',
                   'c': 'current track info'}
 
-
 hug_library = []
 pat_library = []
-
 
 num2word = {'0': 'zero',
             '1': 'one',

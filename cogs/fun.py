@@ -9,6 +9,7 @@ from pydub import AudioSegment
 from wikipedia import DisambiguationError
 from wikipedia import PageError
 import pyfiglet
+import timestring
 
 import storage_manager as storage
 from apis.strawpoll import *
@@ -1430,7 +1431,111 @@ class Fun:
             if len(arg) > 40:
                 arg = arg[:40]
 
-            await self.bot.say('```\n{}\n```'.format(pyfiglet.figlet_format(arg, font=font)))
+            formatted = pyfiglet.figlet_format(arg, font=font)[:1990]
+
+            await self.bot.say('```\n{}\n```'.format(formatted))
+
+        @self.bot.group(pass_context=True)
+        async def birthday(ctx):
+            pass
+
+        @birthday.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def add(in_server, ctx, user: discord.User, *, date: str):
+            bd = in_server.get_birthday(user=user)
+            if bd:
+                await self.bot.say('User **{}** already has a birthday registered'.format(user.name))
+                return
+
+            try:
+                dt = timestring.Date(date).date
+            except:
+                await self.bot.say('Please be more clear about which date you would like to add.')
+                return
+            bd = in_server.add_birthday(user=user, dt=dt)
+
+            storage.write_birthdays(self.bot, in_server)
+
+            await self.bot.say('Added birthday for **{}** as {}'.format(user.name, bd.dt.strftime('%B %-d')))
+
+        @birthday.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def edit(in_server, ctx, user: discord.User, *, date: str):
+            bd = in_server.get_birthday(user=user)
+            if not bd:
+                await self.bot.say('User **{}** does not have a birthday registered'.format(user.name))
+                return
+
+            try:
+                dt = timestring.Date(date).date
+            except:
+                await self.bot.say('Please be more clear about which date you would like to add.')
+                return
+
+            bd.dt = dt
+
+            storage.write_birthdays(self.bot, in_server)
+
+            await self.bot.say('Changed birthday for **{}** to {}'.format(user.name, bd.dt.strftime('%B %-d')))
+
+        @birthday.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def remove(in_server, ctx, user: discord.User):
+            bd = in_server.get_birthday(user=user)
+            if not bd:
+                await self.bot.say('User **{}** does not have a birthday registered'.format(user.name))
+                return
+
+            in_server.birthdays.remove(bd)
+
+            storage.write_birthdays(self.bot, in_server)
+
+            await self.bot.say('Removed birthday for **{}**'.format(user.name))
+
+        @birthday.command(pass_context=True)
+        @self.bot.test_server
+        async def get(in_server, ctx, *, arg: str):
+            user = command_util.find_arg(ctx, arg, ['user'])
+            if not isinstance(user, discord.User):
+                user = await command_util.find_member(ctx, arg, percent=50)
+                if not user:
+                    try:
+                        dt = timestring.Date(arg).date
+                    except:
+                        await self.bot.say('Please provide a user or date to get birthdays from')
+                        return
+
+            if user:
+                bd = in_server.get_birthday(user=user)
+                if not bd:
+                    await self.bot.say('No birthday found for user **{}**'.format(user.name))
+                    return
+
+                em = discord.Embed(title=global_util.TITLE_BAR,
+                                   description='**{}**\'s birthday is on **{}**'.format(user.name, bd.dt.strftime('%B %-d')),
+                                   color=0xffff00)
+                em.set_author(name='Birthday', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f389.png')
+
+                await self.bot.send_message(ctx.message.channel, embed=em)
+
+            elif dt:
+                bds = in_server.get_birthdays(date=dt)
+                if not bds:
+                    await self.bot.say('No users found with birthday **{}**'.format(dt.strftime('%B %-d')))
+                    return
+
+                em = discord.Embed(title=global_util.TITLE_BAR,
+                                   description='__Date: {}__'.format(dt.strftime('%B %-d')),
+                                   color=0xffff00)
+                em.set_author(name='Birthdays', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f389.png')
+
+                names = ''
+                for bd in bds:  # type: Birthday
+                    names += '**{}**, '.format(bd.user.name)
+
+                em.add_field(name=names[:-2], value=global_util.CHAR_ZWS)  # add names up to last ', '
+
+                await self.bot.send_message(ctx.message.channel, embed=em)
 
     @staticmethod
     def is_num(text: str):

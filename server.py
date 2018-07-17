@@ -1,3 +1,6 @@
+from datetime import datetime
+import time
+
 import discord
 from discord.mixins import Hashable
 
@@ -20,7 +23,7 @@ class Server(Hashable):
                  'id', 'reee', 'rolemods', 'spam_timers', 'block_list', 'bot_voice_client',
                  'search_results', 'suggest_emotes', 'music_player', 'music_chat', 'music_channel',
                  'music_loading', 'music_timer', 'late', 'current_track', 'vote_skip', 'join_message',
-                 'join_channel', 'leave_channel', 'response_lib', 'music', 'capture']
+                 'join_channel', 'leave_channel', 'response_lib', 'music', 'capture', 'birthdays']
 
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', 'Default')
@@ -63,6 +66,8 @@ class Server(Hashable):
         if responses:
             for r in responses:
                 self.response_lib.add(Response(**r))
+
+        self.birthdays = kwargs.get('birthdays', [])
 
     def is_mod(self, user: discord.User):
         """Checks if user is a mod
@@ -143,3 +148,30 @@ class Server(Hashable):
                         return r
             else:
                 raise ValueError('Must provide a query.')
+
+    def add_birthday(self, user: discord.User, dt: datetime):
+        bd = Birthday(user=user, dt=dt)
+        self.birthdays.append(bd)
+        return bd
+
+    def get_birthdays(self, date=None):
+        if date:
+            now = date
+        else:
+            now = datetime.utcfromtimestamp(time.time() - (4 * 3600))  # UTC - 4 = EST
+        b_days = []
+        for b in self.birthdays: # type: Birthday
+            if b.dt.day == now.day and b.dt.month == now.month:
+                b_days.append(b)
+
+        return b_days
+
+    def get_birthday(self, user=None, date=None):
+        if user:
+            for b in self.birthdays:  # type: Birthday
+                if user == b.user:
+                    return b
+        elif date:
+            for b in self.birthdays: # type: Birthday
+                if date.day == b.dt.day and date.month == b.dt.month:
+                    return b

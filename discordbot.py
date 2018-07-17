@@ -3,6 +3,8 @@ import importlib
 import random
 import re
 import time
+import inspect
+from datetime import datetime
 
 import discord
 from discord.ext import commands
@@ -11,6 +13,7 @@ import server
 import storage_manager as storage
 from cogs import responses, sense, help
 from util import global_util
+import util.scheduler as scheduler
 
 """
 Breaking Changes:
@@ -54,6 +57,20 @@ class DiscordBot(commands.Bot):
         self._cogs = []  # hold cog instances
 
         self.help_all, self.help_mod = help.build_menus(self)
+
+        async def check_birthdays():
+            print('Checking birthdays for bot {}'.format(self.name))
+            now = datetime.now()
+            for s in self.local_servers:  # type: server.Server
+                for birthday in s.birthdays:
+                    if birthday == now:
+                        await self.send_message(discord.Object(id=s.join_channel),
+                                                content='Happy Birthday to {}!'.format(birthday.user.mention))
+            print('Completed check.')
+
+        self.check_birthdays = check_birthdays
+
+        scheduler.register_hour_event(7, check_birthdays, delete=False)
 
         @self.event  # ---------------------- Main Message Entry ---------------------- #
         async def on_message(message):
@@ -385,11 +402,12 @@ class DiscordBot(commands.Bot):
     def test_high_perm(self, func):
         """Decorator for generic server-based high permission test
 
-        Passes found :class:`Server` object as second arg
+        Passes found :class:`Server` object as first arg, expects a :class:`Context`
+        from above
 
         """
 
-        async def decorator(ctx, *args):
+        async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
                 await self.bot.send_message(ctx.message.channel,
                                             'Sorry, but this command is only accessible from a server')
@@ -398,7 +416,11 @@ class DiscordBot(commands.Bot):
             in_server = self.get_server(server=ctx.message.server)
             if not self.has_high_permissions(ctx.message.author, in_server):
                 return
-            await func(ctx, in_server, *args)
+            await func(in_server, ctx, *args, **kwargs)
+
+        decorator.__name__ = func.__name__
+        sig = inspect.signature(func)
+        decorator.__signature__ = sig.replace(parameters=tuple(sig.parameters.values())[1:])  # from ctx onward
         return decorator
 
     def test_server(self, func):
@@ -408,14 +430,18 @@ class DiscordBot(commands.Bot):
 
         """
 
-        async def decorator(ctx, *args):
+        async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
                 await self.bot.send_message(ctx.message.channel,
                                             'Sorry, but this command is only accessible from a server')
                 return
 
             in_server = self.get_server(server=ctx.message.server)
-            await func(ctx, in_server, *args)
+            await func(in_server, ctx, *args, **kwargs)
+
+        decorator.__name__ = func.__name__
+        sig = inspect.signature(func)
+        decorator.__signature__ = sig.replace(parameters=tuple(sig.parameters.values())[1:])  # from ctx onward
         return decorator
 
     @staticmethod

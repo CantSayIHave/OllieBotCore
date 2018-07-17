@@ -1,3 +1,6 @@
+from datetime import datetime
+import discord
+
 
 class BlockItem:
     def __init__(self, **kwargs):
@@ -161,3 +164,29 @@ class HelpForm:
     @tagline.setter
     def tagline(self, content):
         self._tagline = content
+
+
+class Birthday:
+    __slots__ = ['user', 'dt']
+
+    def __init__(self, user: discord.User, dt: datetime):
+        self.user = user
+        self.dt = dt
+
+    def __str__(self):
+        return "Birthday:[user_id={},dt={}]".format(self.user.id, self.dt.strftime('%Y-%m-%dT%H:%M:%S'))
+
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        if isinstance(other, datetime):
+            return self.dt.day == other.day and self.dt.month == other.month
+        elif isinstance(other, Birthday):
+            return self.dt.day == other.dt.day and self.dt.month == other.dt.month
+        else:
+            return False
+
+    def as_dict(self):
+        return {'user': self.user.id, 'dt': self.dt.strftime('%Y-%m-%dT%H:%M:%S')}
+
