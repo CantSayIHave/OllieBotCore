@@ -91,7 +91,9 @@ class Admin:
 
             await self.bot.say('My invite link is '
                                'https://discordapp.com/oauth2/authorize?'
-                               '&client_id={}&scope=bot'.format(self.bot.user.id))
+                               '&client_id={}'
+                               '&scope=bot'
+                               '&permissions=2146823281'.format(self.bot.user.id))
 
         @self.bot.command(pass_context=True)
         async def prefix(ctx, arg: str = None, *, symbol: str = None):
