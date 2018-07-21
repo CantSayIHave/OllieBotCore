@@ -391,7 +391,7 @@ class Fun:
             e = discord.Embed(description="{0} joined {1} on {2}".format(member.display_name,
                                                                          ctx.message.server.name,
                                                                          member.joined_at.strftime("%B %-d, %Y at "
-                                                                                                   "%H:%M:%S")),
+                                                                                                   "%H:%M:%S UTC")),
                               color=0x00d114)
             e.set_author(name=member.name, icon_url=member.avatar_url)
 
@@ -422,7 +422,7 @@ class Fun:
                 e.add_field(name='This user is a bot. (unlike me)', value=CHAR_ZWS, inline=False)
 
             e.add_field(name='Joined __{}__'.format(ctx.message.server.name),
-                        value=member.joined_at.strftime('%B %-d, %Y at %H:%M:%S'),
+                        value=member.joined_at.strftime('%B %-d, %Y at %H:%M:%S UTC'),
                         inline=False)
 
             e.add_field(name='ID', value=member.id, inline=False)
@@ -446,7 +446,7 @@ class Fun:
             else:
                 e.add_field(name='Nickname', value='N/A', inline=False)
 
-            e.add_field(name='Created', value=member.created_at.strftime('%B %-d, %Y at %H:%M:%S'), inline=False)
+            e.add_field(name='Created', value=member.created_at.strftime('%B %-d, %Y at %H:%M:%S UTC'), inline=False)
 
             await self.bot.say(embed=e)
 
