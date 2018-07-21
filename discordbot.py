@@ -120,6 +120,19 @@ class DiscordBot(commands.Bot):
 
                 return
 
+            if not self.get_server(name=message.server.name):  # server auto-add and name change update
+                real_server = self.get_server(message.server)
+                if real_server:
+                    real_server.name = message.server.name  # handle server name changes
+                    storage.write_bot(self)
+                else:
+                    new_server = server.Server(name=message.server.name,
+                                        mods=[message.server.owner.id],
+                                        command_delay=1,
+                                        id=message.server.id)
+                    self.local_servers.append(new_server)
+                    storage.write_bot(self)
+
             in_server = self.get_server(message.server)
 
             high_perm = self.has_high_permissions(message.author, in_server)
@@ -136,19 +149,6 @@ class DiscordBot(commands.Bot):
             content_lower = message.content.lower()  # type: str
 
             await self.find_reee(content_lower, message, in_server)
-
-            if not self.get_server(name=message.server.name):  # server auto-add and name change update
-                real_server = self.get_server(message.server)
-                if real_server:
-                    real_server.name = message.server.name  # handle server name changes
-                    storage.write_bot(self)
-                else:
-                    new_server = server.Server(name=message.server.name,
-                                        mods=[message.server.owner.id],
-                                        command_delay=1,
-                                        id=message.server.id)
-                    self.local_servers.append(new_server)
-                    storage.write_bot(self)
 
             await responses.execute_responses(message, self, in_server, content_lower=content_lower)
 
