@@ -50,6 +50,9 @@ class Server(Hashable):
         self.current_track = None
         self.vote_skip = None
 
+        # todo: rename rss to feeds (everywhere) and destroy commands
+        # todo: rename command_delay to spam_time
+
         # 12/13/17 update
         self.join_message = kwargs.get('join_msg', 'Welcome to the server, @u!')
         self.join_channel = kwargs.get('join_channel', '')
