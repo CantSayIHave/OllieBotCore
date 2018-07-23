@@ -116,16 +116,9 @@ class ServerUtils:
                 else:
                     print('Failed admin attempt on ' + time.strftime('%a %D at %H:%M:%S'))
 
-        @perm.group(pass_context=True)
-        async def mod(ctx, arg: str):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = self.bot.get_server(server=ctx.message.server)
-
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
+        @perm.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def mod(in_server, ctx, arg: str):
 
             if arg == 'listall':
                 em = discord.Embed(title='───────────────────────', color=0xf4f142)  # yellow
