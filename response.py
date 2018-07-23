@@ -385,4 +385,5 @@ class ResponseLibrary:
             text = text[:-4]
         return text
 
-
+    def as_list(self):
+        return [x.__dict__ for x in self.responses]
