@@ -427,39 +427,5 @@ class Music:
             return '{}:{}'.format(out_minutes, out_seconds)
 
 
-"""
-async def autoplay_next(bot, in_server: Server):
-    in_server.vote_skip_clear()
-    next_up = in_server.get_music_url()
-    if next_up:
-        bot_vc = in_server.bot_voice_client
-        if in_server.music_loading:
-            return True
-        in_server.music_loading = True
-        in_server.music_player = await bot_vc.create_ytdl_player(next_up['url'],
-                                                                 before_options="-reconnect 1")
-        in_server.music_loading = False
-        in_server.music_player.start()
-        in_server.music_player.volume = 1.0
-        await bot.send_message(in_server.music_channel,
-                               'Track `{0}` enqueued by `{1}` is now playing.'.format(next_up['title'],
-                                                                                      next_up['user']))
-        return True
-    else:
-        return False
-
-
-async def music_autoplay(s: Server, bot):  # bot is discord bot
-    if s.music_player:
-        if s.music_player.is_done() and not s.music_player.is_playing():
-            if s.music_channel and s.bot_voice_client:
-                if not (await autoplay_next(bot, s)):
-                    if s.music_timeout():
-                        await s.bot_voice_client.disconnect()
-                        await bot.send_message(s.music_channel, 'Disconnecting due to inactivity. :sleeping:')
-                        s.music_channel = None
-                        s.bot_voice_client = None"""
-
-
 def setup(bot):
     return Music(bot)

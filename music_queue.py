@@ -40,16 +40,16 @@ class MusicQueue:
         self.player = None
         self.autoplay_channel = None
         self.is_loading = False
-        self.disconnect_timer = None
         self.current_track = None
         self.vote_skip = None
         self.bot_voice_client = None
+        self.bot = None
 
     def __len__(self):
         return len(self.queue)
 
     def __iter__(self):
-        return self.queue.__iter__()
+        return iter(self.queue)
 
     def __next__(self):
         return self.queue.__next__()
@@ -104,6 +104,7 @@ class MusicQueue:
             return None
 
     async def play_next(self, ctx, in_server, bot: commands.Bot):
+        self.bot = bot
 
         if self.is_loading:  # set loading bool to prevent thread collisions
             return True
@@ -212,6 +213,7 @@ class MusicQueue:
             self.is_loading = False
             return True
         else:
+            global_util.schedule_future(self.check_timeout(), time=30)  # register disconnect check
             return False
 
     def vote_skip_clear(self):
@@ -252,3 +254,28 @@ class MusicQueue:
         elif 'youtu.be' in url:
             return url.rsplit('/', 1)[1]
         return None
+
+    async def auto_disconnect(self):
+        on_vc = self.bot_voice_client
+        if on_vc:
+            try:
+                self.player.stop()
+            except AttributeError:
+                print('-No player to stop.')
+            vc_name = on_vc.channel.name
+            await on_vc.disconnect()
+
+            await self.bot.send_message(self.autoplay_channel,
+                                        'Disconnected from voice channel `{}` due to inactivity'.format(vc_name))
+
+            self.player = None
+            self.autoplay_channel = None
+            self.bot_voice_client = None
+            return True
+        else:
+            return False
+
+    async def check_timeout(self):
+        if not self.is_playing():
+            await self.auto_disconnect()
+
