@@ -67,8 +67,8 @@ class DeleteMessage:
 
     def __str__(self):
         return "DeleteMessage:[m={}, t={}, b={}]".format(self.message,
-                                                     self.timer,
-                                                     self.bot)
+                                                         self.timer,
+                                                         self.bot)
 
 
 class ProxyMessage:
@@ -83,15 +83,16 @@ class ProxyMessage:
 
     def __str__(self):
         return "ProxyMessage:[ch={}, cn={}, e={}, b={}]".format(self.channel,
-                                                             self.content,
-                                                             self.embed,
-                                                             self.bot)
+                                                                self.content,
+                                                                self.embed,
+                                                                self.bot)
 
 
 class TimedFuture:
     def __init__(self, **kwargs):
         self.coro = kwargs.get('coro', None)
         self.timer = kwargs.get('timer', 0)
+        self.name = kwargs.get('name', '')
 
     def __repr__(self):
         return self.__str__()
@@ -189,4 +190,3 @@ class Birthday:
 
     def as_dict(self):
         return {'user': self.user.id, 'dt': self.dt.strftime('%Y-%m-%dT%H:%M:%S')}
-

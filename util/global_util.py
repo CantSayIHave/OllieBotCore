@@ -198,8 +198,14 @@ def schedule_delete(bot, msg, time: int):
     delete_queue.append(DeleteMessage(message=msg, bot=bot, timer=time))
 
 
-def schedule_future(coro, time: int):
-    coro_queue.append(TimedFuture(coro=coro, timer=time))
+def schedule_future(coro, time: int, name: str = ''):
+    coro_queue.append(TimedFuture(coro=coro, timer=time, name=name))
+
+
+def future_is_scheduled(name: str):
+    for tf in coro_queue:
+        if tf.name and tf.name == name:
+            return True
 
 
 # helper function purely for formatting
