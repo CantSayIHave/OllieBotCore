@@ -42,7 +42,7 @@ class DiscordBot(commands.Bot):
         self.token = options.get('token', '')
         self.desc = options.get('desc', 'No desc')
         self.prefix = options.get('prefix', '.')
-        self.playing_message = options.get('playing_msg', 'world domination')
+        self.playing_message = options.get('playing_message', '{}help [command]'.format(self.prefix))
         self.admins = options.get('admins', [])
         self.bot_list = options.get('bot_list', [])
 
