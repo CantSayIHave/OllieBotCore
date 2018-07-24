@@ -42,7 +42,7 @@ class DiscordBot(commands.Bot):
         self.token = options.get('token', '')
         self.desc = options.get('desc', 'No desc')
         self.prefix = options.get('prefix', '.')
-        self.playing_message = options.get('playing_message', '{}help [command]'.format(self.prefix))
+        self.playing_message = options.get('playing_msg', '{}help [command]'.format(self.prefix))
         self.admins = options.get('admins', [])
         self.bot_list = options.get('bot_list', [])
 
@@ -207,6 +207,17 @@ class DiscordBot(commands.Bot):
                 await self.send_message(discord.Object(id=in_server.join_channel), out_msg)
             else:
                 await self.send_message(discord.Server(id=in_server.id), out_msg)
+
+            if in_server.default_role:
+                role = global_util.iterfind(member.server.roles, lambda x: x.id == in_server.default_role)
+                if role:
+                    try:
+                        await self.add_roles(member, role)
+                    except discord.Forbidden:
+                        print('Role adding disallowed for server {}'.format(in_server.name))
+                else:
+                    in_server.default_role = None
+                    storage.write_server_data(self, in_server)
 
         @self.event
         async def on_member_remove(member):

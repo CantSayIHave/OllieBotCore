@@ -27,6 +27,14 @@ block = form('`{0}block <all/here> [command]`\n'
 block.add_tagline('block a command from non-mods')
 block.high_perm = True
 
+defaultrole = form('`{0}defaultrole`\n'
+                   '`{0}defaultrole <set> [@role]`\n'
+                   '`{0}defaultrole <remove>`\n'
+                   'Set a default role to be given to new users')
+
+defaultrole.add_tagline('Set a default role')
+defaultrole.high_perm = True
+
 emotes = form('`{0}emotes <suggest> [link]`\n'
               '`{0}emotes <suggest> (upload image in message)`\n'
               '`{0}emotes <add> <name> [link]`\n'

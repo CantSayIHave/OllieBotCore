@@ -994,7 +994,7 @@ class ServerUtils:
 
         @roles.command(pass_context=True)
         @self.bot.test_high_perm
-        async def timeout(ctx, server):
+        async def timeout(server, ctx):
             timeout_role = None
             try:
                 timeout_role = [x for x in ctx.message.server.roles if x.name.lower() == 'timeout'][0]
@@ -1152,7 +1152,7 @@ class ServerUtils:
 
         @self.bot.command(pass_context=True)
         @self.bot.test_high_perm
-        async def unmute(ctx, server, member: discord.Member):
+        async def unmute(server, ctx, member: discord.Member):
             timeout_role = None
             try:
                 timeout_role = [x for x in ctx.message.server.roles if x.name.lower() == 'timeout'][0]
@@ -1200,6 +1200,27 @@ class ServerUtils:
                 await self.bot.say('Leave messages set to channel {}'.format(channel.mention))
 
             storage.write_server_data(self.bot, in_server)
+
+        @self.bot.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def defaultrole(server, ctx, arg=None, role: discord.Role = None):
+            if arg:
+                if arg == 'set' and role:
+                    server.default_role = role.id
+                    await self.bot.say('Set default role to **{}**'.format(role.name))
+                elif arg.startswith('rem'):
+                    server.default_role = None
+                    await self.bot.say('Cleared default role ✅')
+
+                storage.write_server_data(self.bot, server)
+            else:
+                d_role = iterfind(ctx.message.server.roles, lambda x: x.id == server.default_role)
+                if d_role:
+                    await self.bot.say('Default role is currently set to **{}**'.format(d_role.name))
+                else:
+                    await self.bot.say('No default role is currently set.')
+                    server.default_role = None
+                    storage.write_server_data(self.bot, server)
 
     @staticmethod
     def replace_color(img: Image.Image, color: int, variance: int):

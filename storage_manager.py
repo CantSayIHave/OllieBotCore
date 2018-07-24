@@ -99,6 +99,7 @@ def load_bot(bot_name: str):  # -> discordbot.DiscordBot
                 s_join_channel = server_data['join_channel']
                 s_leave_channel = server_data.get('leave_channel', None)
                 s_music_chat = server_data.get('music_chat', None)
+                s_default_role = server_data.get('default_role', None)
 
                 for com in server_data['block_list']:
                     s_block_list.append(BlockItem(**com))
@@ -153,7 +154,8 @@ def load_bot(bot_name: str):  # -> discordbot.DiscordBot
                                       queue=s_queue,
                                       music_chat=s_music_chat,
                                       leave_channel=s_leave_channel,
-                                      birthdays=s_birthdays))  # Server Build
+                                      birthdays=s_birthdays,
+                                      default_role=s_default_role))  # Server Build
 
         print('Loaded bot {}'.format(bot_name))
         return discordbot.DiscordBot(name=bot_name,
@@ -235,7 +237,8 @@ def write_server_data(b, s: Server):
                            'join_msg': s.join_message,
                            'join_channel': s.join_channel,
                            'leave_channel': s.leave_channel,
-                           'music_chat': s.music_chat}
+                           'music_chat': s.music_chat,
+                           'default_role': s.default_role}
 
             json.dump(server_dict, fi)
 
@@ -313,7 +316,8 @@ def write_bot(b):
                            'join_msg': s.join_message,
                            'join_channel': s.join_channel,
                            'leave_channel': s.leave_channel,
-                           'music_chat': s.music_chat}
+                           'music_chat': s.music_chat,
+                           'default_role': s.default_role}
 
             json.dump(server_dict, fi)
 

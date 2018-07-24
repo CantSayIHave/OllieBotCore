@@ -186,11 +186,19 @@ def extract_filename(path):
     return path
 
 
-# i forgot what non-builtin attributes are called so it's "new"
+# I forgot what non-builtin attributes are called so it's "new"
 def get_new_attr(thing, check=None):
     if check:
         return (x for x in thing.__dict__ if not x.startswith('__') and check(getattr(thing, x)))
     return (x for x in thing.__dict__ if not x.startswith('__'))
+
+
+# iterator find help util
+def iterfind(iterable, check, default=None):
+    for i in iterable:
+        if check(i):
+            return i
+    return default
 
 
 # time in seconds

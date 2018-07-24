@@ -23,7 +23,8 @@ class Server(Hashable):
                  'id', 'reee', 'rolemods', 'spam_timers', 'block_list', 'bot_voice_client',
                  'search_results', 'suggest_emotes', 'music_player', 'music_chat', 'music_channel',
                  'music_loading', 'music_timer', 'late', 'current_track', 'vote_skip', 'join_message',
-                 'join_channel', 'leave_channel', 'response_lib', 'music', 'capture', 'birthdays']
+                 'join_channel', 'leave_channel', 'response_lib', 'music', 'capture', 'birthdays',
+                 'default_role']
 
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', 'Default')
@@ -49,6 +50,8 @@ class Server(Hashable):
         self.late = None
         self.current_track = None
         self.vote_skip = None
+
+        self.default_role = kwargs.get('default_role', None)
 
         # todo: rename rss to feeds (everywhere) and destroy commands
         # todo: rename command_delay to spam_time
