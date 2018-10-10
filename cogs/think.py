@@ -7,18 +7,19 @@ from discord.ext import commands
 import face
 from discordbot import DiscordBot
 from util import global_util, command_util
+import storage_manager_v2 as storage
 
 stickers = {}
-with open("resources/sticker_profiles.json", 'r') as f:
-    serialized = json.load(f)['stickers']
-    for s in serialized:
-        options = {}
-        for o in serialized[s]:
-            if o in ['sticker_x', 'sticker_y']:
-                options[o] = eval(serialized[s][o])
-            else:
-                options[o] = serialized[s][o]
-        stickers[s] = face.StickerProfile(**options)
+
+serialized = storage.load_stickers()
+for s in serialized:
+    options = {}
+    for o in serialized[s]:
+        if o in ['sticker_x', 'sticker_y']:
+            options[o] = eval(serialized[s][o])
+        else:
+            options[o] = serialized[s][o]
+    stickers[s] = face.StickerProfile(**options)
 
 
 class Think:

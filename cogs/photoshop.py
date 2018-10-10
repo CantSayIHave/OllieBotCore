@@ -5,20 +5,17 @@ import os
 import discord
 from PIL import Image
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from discordbot import DiscordBot
 from server import Server
 from util import global_util, command_util
 
-storage.mkdir_safe('photoshop')
-storage.mkfile_safe('./photoshop/backgrounds.json', '{}')
-with open('./photoshop/backgrounds.json', 'r') as b:
-    backgrounds = json.load(b)
+
+backgrounds = storage.load_backgrounds()
 
 
 def write():
-    with open('./photoshop/backgrounds.json', 'w') as b:
-        json.dump(backgrounds, b)
+    storage.write_backgrounds(backgrounds)
 
 
 def add_background(name, url):
@@ -34,7 +31,7 @@ class PhotoShop:
         self.bot = bot
         self.backgrounds = bg
 
-        @self.bot.group()
+        @self.bot.group(aliases=['ps'])
         async def photoshop():
             pass
 

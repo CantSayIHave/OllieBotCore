@@ -3,7 +3,7 @@ import shlex
 
 from discord.ext import commands
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from response import *
 from server import Server
 from util import global_util, paginator
@@ -79,7 +79,7 @@ class Responses:
 
             r = in_server.response_lib.add(Response(**add_dict))
 
-            storage.write_responses(self.bot, in_server)
+            storage.write_responses(in_server)
 
             if r.is_image:
                 await self.bot.say('Added image response {} to library ✅'.format(name))
@@ -109,7 +109,7 @@ class Responses:
 
             attempt = in_server.response_lib.remove(name)
 
-            storage.write_responses(self.bot, in_server)
+            storage.write_responses(in_server)
 
             if attempt:
                 await self.bot.say('Successfully removed response {} from the library!'.format(name))
@@ -149,7 +149,7 @@ class Responses:
 
             r = in_server.response_lib.edit(resp, add_dict)
 
-            storage.write_responses(self.bot, in_server)
+            storage.write_responses(in_server)
 
             new_options = self.get_display(r.__dict__)
 
@@ -196,7 +196,7 @@ class Responses:
             else:
                 resp.content += to_append
 
-            storage.write_responses(self.bot, in_server)
+            storage.write_responses(in_server)
 
             options = self.get_display(resp.__dict__)
 
@@ -235,7 +235,7 @@ class Responses:
 
             to_server.response_lib.responses.append(copy.deepcopy(resp))
 
-            storage.write_responses(self.bot, to_server)
+            storage.write_responses(to_server)
 
             await self.bot.say('Sent response `{}` to server `{}`'.format(name, to_server.name))
 
@@ -294,7 +294,8 @@ class Responses:
                                      bot=self.bot,
                                      destination=ctx.message.channel,
                                      icon='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png',
-                                     color=0xff00dc)
+                                     color=0xff00dc,
+                                     author=ctx.message.author)
 
         @response.command(pass_context=True)
         async def help(ctx, arg: str = None):

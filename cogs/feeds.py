@@ -1,12 +1,14 @@
 from datetime import datetime
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from discordbot import DiscordBot
 from util import global_util
-from util.containers import *
+from util.feeds import *
 
 
 class Feeds:
+    rss_feed_types = ['twitter', 'twitch', 'youtube']
+
     def __init__(self, bot: DiscordBot):
         self.bot = bot
 
@@ -16,155 +18,151 @@ class Feeds:
 
         # Creates an rss feed in [User | Channel ID | Last Tweet ID] format
         @rss.command(pass_context=True)
-        async def add(ctx, platform: str, user: str):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
+        @self.bot.test_high_perm
+        async def add(server, ctx, platform: str, user: str):
+            if platform.lower() not in self.rss_feed_types:
+                await self.bot.say('Sorry, {} is not a valid feed type.\n'
+                                   'Supported feeds include Twitch, Twitter and YouTube'
+                                   ''.format(platform))
                 return
 
-            in_server = self.bot.get_server(server=ctx.message.server)
+            platform = platform.lower()
 
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if user[0] == '@':
+            if platform == 'twitter' and user[0] == '@':
                 user = user[1:]  # takes @ off a username
 
-            if platform.lower() not in global_util.rss_feeds:
-                await self.bot.say('Sorry, ' + platform + ' is not a valid feed type.\n'
-                                                          'Supported feeds include Twitch, Twitter and YouTube')
-                return
+            feed_channel = ctx.message.channel
 
-            add_channel = ctx.message.channel
+            if platform == 'twitter':
+                if server.get_feed(feed_channel, type=platform, name=user):  # if rss exists, cancel
+                    await self.bot.say('User `@{}` already has a Twitter feed on this channel'.format(user))
+                    return
 
-            if in_server:  # add rss
-                if platform.lower() == 'twitter':
-                    if in_server.get_rss(add_channel, uid=user):  # if rss exists, cancel
-                        await self.bot.say('User `@{}` already has a Twitter feed on this channel'.format(user))
-                        return
+                try:
+                    await server.add_twitter_feed(handle=user)
+                except Exception as e:
+                    await self.bot.say('No user `@{}` exists!\nExcept {}'.format(user, e))
+                    return
 
-                    in_server.rss.append(Feed(uid=user,
-                                              channel_id=add_channel.id,
-                                              last_id='h',
-                                              type='twitter'))
-                    storage.write_rss(self.bot, in_server)
-                    await self.bot.say('Added Twitter feed for `@{}` to {}'.format(user, add_channel.mention))
-                    global_util.rss_timer = 70
+                storage.write_feeds(server)
+                await self.bot.say('Added Twitter feed for `@{}` to {}'.format(user, feed_channel.mention))
+                global_util.feeds_timer = 70
 
-                elif platform.lower() == 'twitch':
-                    twitch_channel = await global_util.twitch.get_channel_from_name(user)
-                    if not twitch_channel:
-                        await self.bot.say('Twitch user `{}` does not exist'.format(user))
-                        return
+            elif platform == 'twitch':
+                twitch_channel = await global_util.twitch.get_channel_from_name(user)
+                if not twitch_channel:
+                    await self.bot.say('Twitch user `{}` does not exist'.format(user))
+                    return
 
-                    if in_server.get_rss(add_channel, uid=twitch_channel['_id']):
-                        await self.bot.say('User `{}` already has a Twitch feed on this channel'
-                                           ''.format(twitch_channel['display_name']))
-                        return
+                if server.get_feed(feed_channel, type=platform, channel_id=twitch_channel['_id']):
+                    await self.bot.say('User `{}` already has a Twitch feed on this channel'
+                                       ''.format(twitch_channel['display_name']))
+                    return
 
-                    in_server.rss.append(Feed(uid=twitch_channel['_id'],
-                                              channel_id=add_channel.id,
-                                              last_id='h',
-                                              type='twitch',
-                                              title=twitch_channel['display_name'],
-                                              user=user))
-                    storage.write_rss(self.bot, in_server)
-                    await self.bot.say('Added Twitch feed for `' + twitch_channel['display_name'] +
-                                       '` to ' + add_channel.mention)
-                    global_util.rss_timer = 70
+                try:
+                    await server.add_twitch_feed(username=user)
+                except:
+                    await self.bot.say('Something went wrong, couldn\'t add feed :(')
+                    return
 
-                elif platform.lower() == 'youtube':
-                    if user[:4] == 'http':
-                        token_start = user.find('user/')  # what is this absolute nonsense
-                        if token_start == -1:
-                            token_start = user.find('channel/')
-                            if token_start == -1:
-                                await self.bot.say('This link is invalid.')  # please don't judge me.
-                                return
-                            token_start += len('channel/')
-                            ytchannel = await global_util.yt.get_channel_by_id(user[token_start:])
-                            if not ytchannel:
-                                await self.bot.say('This link is invalid.')
-                                return
+                storage.write_feeds(server)
+                await self.bot.say('Added Twitch feed for `{}` to channel {}'.format(twitch_channel['display_name'],
+                                                                                     feed_channel.mention))
+                global_util.feeds_timer = 70
 
-                        else:
-                            token_start += len('user/')
-                            ytchannel = await global_util.yt.get_channel_by_name(user[token_start:])
-                            if not ytchannel:
-                                await self.bot.say('This link is invalid.')
-                                return
+            elif platform == 'youtube':
+
+                """Channel links take forms:
+                www.youtube.com/user/someusername
+                www.youtube.com/channel/somechannelid
+                """
+
+                yt_channel = None
+
+                if user.startswith('http'):
+                    url = user
+                    if 'user/' in url:
+                        username = url.split('user/')[1]
+                        yt_channel = await global_util.yt.get_channel_by_name(username)
+
+                    elif 'channel/' in url:
+                        channel_id = url.split('channel/')[1]
+                        yt_channel = await global_util.yt.get_channel_by_id(channel_id)
+
                     else:
-                        ytchannel = await global_util.yt.get_channel_by_name(user)
-                    if not ytchannel:
-                        await self.bot.say('Youtube user `{}` does not exist'.format(user))
+                        await self.bot.say('This link is invalid, please provide a valid channel link 🔗')
                         return
+                else:
+                    yt_channel = await global_util.yt.get_channel_by_name(user)
 
-                    if in_server.get_rss(add_channel, uid=ytchannel['id']):  # if rss exists, cancel
-                        await self.bot.say('User `{}` already has a YouTube feed on this channel'
-                                           ''.format(ytchannel['snippet']['title']))
-                        return
+                if not yt_channel:
+                    await self.bot.say('Youtube user `{}` does not exist'.format(user))
+                    return
 
-                    in_server.rss.append(Feed(uid=ytchannel['id'],
-                                              channel_id=add_channel.id,
-                                              last_id='h',
-                                              last_time='h',
-                                              type='youtube',
-                                              title=ytchannel['snippet']['title']))
+                channel_id = yt_channel['id']
 
-                    storage.write_rss(self.bot, in_server)
-                    await self.bot.say('Added YouTube feed for `' + ytchannel['snippet']['title'] +
-                                       '` to ' + add_channel.mention)
-                    global_util.rss_timer = 70
+                if server.get_feed(feed_channel, type=platform, channel_id=yt_channel['id']):  # if rss exists, cancel
+                    await self.bot.say('User `{}` already has a YouTube feed on this channel'
+                                       ''.format(yt_channel['snippet']['title']))
+                    return
+
+                try:
+                    await server.add_youtube_feed(channel_id=channel_id)
+                except:
+                    await self.bot.say('Something went wrong, couldn\'t add feed :(')
+                    return
+
+                storage.write_feeds(server)
+                await self.bot.say('Added YouTube feed for `{}` to channel {}'.format(yt_channel['snippet']['title'],
+                                                                                      feed_channel.mention))
+                global_util.feeds_timer = 70
 
         @rss.command(pass_context=True)
-        async def remove(ctx, platform: str, user: str):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
+        @self.bot.test_high_perm
+        async def remove(server, ctx, platform: str, user: str):
 
-            in_server = self.bot.get_server(server=ctx.message.server)
-
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if user[0] == '@':
-                user = user[1:]  # takes @ off a username
-
-            if platform.lower() not in global_util.rss_feeds:
+            if platform.lower() not in self.rss_feed_types:
                 await self.bot.say('Sorry, {} is not a valid feed type.\n'
                                    'Supported feeds include Twitch, Twitter and YouTube'.format(platform))
                 return
 
+            if platform == 'twitter' and user[0] == '@':
+                user = user[1:]  # takes @ off a handle
+
+            platform = platform.lower()
+
             feed_channel = ctx.message.channel
 
-            if platform.lower() == 'twitter':
-                r_feed = in_server.get_rss(feed_channel, uid=user)
+            if platform == 'twitter':
+                feed = server.get_feed(feed_channel, name=user, type=platform, search_lower=True)
 
-                if r_feed:
-                    await self.bot.say('Removed Twitter feed for `@{}` from {}'.format(user, feed_channel.mention))
-                    in_server.rss.remove(r_feed)
-                    storage.write_rss(self.bot, in_server)
+                if feed:
+                    deleted = await server.remove_feed(feed)  # type: TwitterFeed
+                    storage.write_feeds(server)
+                    await self.bot.say('Removed Twitter feed for `@{}` from {}'.format(deleted.handle,
+                                                                                       feed_channel.mention))
                 else:
                     await self.bot.say('No Twitter feed for `@{}` exists on this channel'.format(user))
 
-            elif platform.lower() == 'twitch':
-                r_feed = in_server.get_rss(feed_channel, title=user, wide_search=True)
+            elif platform == 'twitch':
+                feed = server.get_feed(feed_channel, name=user, type=platform, search_lower=True)
 
-                if r_feed:
-                    await self.bot.say(
-                        'Removed Twitch feed for `{}` from {}'.format(r_feed.title, feed_channel.mention))
-                    in_server.rss.remove(r_feed)
-                    storage.write_rss(self.bot, in_server)
+                if feed:
+                    deleted = await server.remove_feed(feed)  # type: TwitchFeed
+                    storage.write_feeds(server)
+                    await self.bot.say('Removed Twitch feed for `{}` from {}'.format(deleted.title,
+                                                                                     feed_channel.mention))
                 else:
                     await self.bot.say('No Twitch feed for `{}` exists on this channel'.format(user))
 
-            elif platform.lower() == 'youtube':
-                r_feed = in_server.get_rss(feed_channel, title=user, wide_search=True)
+            elif platform == 'youtube':
+                feed = server.get_feed(feed_channel, name=user, type=platform, search_lower=True)
 
-                if r_feed:
-                    await self.bot.say('Removed YouTube feed for '
-                                       '`{}` from {}'.format(r_feed.title, feed_channel.mention))
-                    in_server.rss.remove(r_feed)
-                    storage.write_rss(self.bot, in_server)
+                if feed:
+                    deleted = await server.remove_feed(feed)
+                    storage.write_feeds(server)
+                    await self.bot.say('Removed YouTube feed for `{}` from {}'.format(deleted.title,
+                                                                                      feed_channel.mention))
                 else:
                     await self.bot.say('No YouTube feed for `{}` exists on this channel'.format(user))
 
@@ -179,9 +177,9 @@ class Feeds:
             if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            if in_server.rss:
+            if in_server.feeds:
                 out_str = ""
-                for r in in_server.rss:  # type: Feed
+                for r in in_server.feeds:  # type: Feed
                     if r:
                         if arg == 'debug':
                             if r.type == 'twitter':
@@ -215,13 +213,13 @@ class Feeds:
             if not self.bot.check_admin(ctx.message.author):
                 return
 
-            for r in in_server.rss:
+            for r in in_server.feeds:
                 if (feed_type.lower() == r.type) and (user == r.title):  # WHAT THE HELL IS ALL THIS
                     r.last_id = 'none'
                     last_time = datetime.strptime(r.last_time[:r.last_time.find('.')], '%Y-%m-%dT%H:%M:%S')
                     last_time = last_time.replace(year=last_time.year - 1)
                     r.last_time = last_time.strftime('%Y-%m-%dT%H:%M:%S') + '.'  # WHAT WAS I THINKING
-                    global_util.rss_timer = 70
+                    global_util.feeds_timer = 70
 
         @rss.command(pass_context=True)
         async def clear(ctx):
@@ -235,8 +233,8 @@ class Feeds:
                 return
 
             await self.bot.say('Clearing all rss.')
-            in_server.rss = []
-            storage.write_rss(self.bot, in_server)
+            in_server.feeds = []
+            storage.write_feeds(in_server)
 
         @rss.command(pass_context=True)
         async def help(ctx, arg: str = None):
@@ -262,98 +260,59 @@ class Feeds:
                                         "**Rss usage**:\n"
                                         "`{0}rss <add/remove> <twitter/twitch/youtube> [username]`\n"
                                         "`{0}rss <list>`\n"
-                                        "Example: `.rss add twitter @pewdiepie` binds PieDiePie's twitter feed to the "
+                                        "Example: `.feeds add twitter @pewdiepie` binds PieDiePie's twitter feed to the "
                                         "channel this is called from\n "
-                                        "Call `.rss help users` for user formatting info".format(
+                                        "Call `.feeds help users` for user formatting info".format(
                                             self.bot.command_prefix))
 
 
-def scrape_twitter(b, s, r):
-    t_feed = global_util.twitter_api.GetUserTimeline(screen_name=r.uid, count=1)
-    if t_feed:
-        last_tweet = t_feed[0]
-        if last_tweet:
-            if str(last_tweet.id) != str(r.last_id):
-                if str(r.last_id) == 'h':
-                    global_util.proxy_message(b,
-                                              r.channel_id,
-                                              'Twitter feed for `@{0}` has now been enabled.\n'
-                                              'https://twitter.com/{0}/status/{1}'.format(r.uid, str(last_tweet.id)))
-                else:
-                    if last_tweet.text:
-                        if last_tweet.text[0] != '@':
-                            global_util.proxy_message(b,
-                                                      r.channel_id,
-                                                      'https://twitter.com/{0}/status/{1}'.format(r.uid,
-                                                                                                  str(last_tweet.id)))
-                    else:
-                        global_util.proxy_message(b,
-                                                  r.channel_id,
-                                                  'https://twitter.com/{0}/status/{1}'.format(r.uid,
-                                                                                              str(last_tweet.id)))
+async def send_update(bot: DiscordBot, server, new_feed: RssFeed):
+    old_feed = server.get_feed(id=new_feed.id)  # type: RssFeed
+    if old_feed:
+        old_feed.update(new_feed)
 
-                r.last_id = str(last_tweet.id)
-                storage.write_rss(b, s)  # bot, server
+        if isinstance(old_feed, TwitterFeed):
+            await bot.send_message(old_feed.discord_channel_id,
+                                   'https://twitter.com/{0}/status/{1}'.format(old_feed.handle, old_feed.last_tweet_id))
 
+        elif isinstance(old_feed, TwitchFeed):
+            await bot.send_message(old_feed.discord_channel_id,
+                                   '{} is now streaming!\nhttps://www.twitch.tv/{}'
+                                   ''.format(old_feed.title, old_feed.last_stream_id))
 
-async def scrape_youtube(b, s, r):
-    search = None
-    try:
-        search = await global_util.yt.get_channel_videos(r.uid, 1)
-    except Exception as e:
-        print(e)
-    if search:
-        last_vid = search[0]
-        if last_vid['id']['videoId'] != str(r.last_id):
-            if str(r.last_id) == 'h':
-                global_util.proxy_message(b, r.channel_id,
-                                          'Youtube feed for {} has now been enabled. All future '
-                                          'updates will now push `@everyone` mentions for '
-                                          'visibility. Here is the most recent video for this'
-                                          'channel:\n'
-                                          'https://www.youtube.com/watch?v={}'
-                                          ''.format(str(r.title), last_vid['id']['videoId']))
-                r.last_time = last_vid['snippet']['publishedAt']
-                r.last_id = last_vid['id']['videoId']
-                storage.write_rss(b, s)  # bot, server
-            else:
-                dtime_seq = last_vid['snippet']['publishedAt']
-                this_time = datetime.strptime(dtime_seq[:dtime_seq.find('.')],
-                                              '%Y-%m-%dT%H:%M:%S')
-                last_time = datetime.strptime(r.last_time[:r.last_time.find('.')],
-                                              '%Y-%m-%dT%H:%M:%S')
-                if this_time > last_time:
-                    global_util.proxy_message(b, r.channel_id,
-                                              '@everyone\n{} has a new video!\n'
-                                              'https://www.youtube.com/watch?v={}'
-                                              ''.format(str(r.title), last_vid['id']['videoId']))
-                    r.last_time = last_vid['snippet']['publishedAt']
-                    r.last_id = last_vid['id']['videoId']
-                    storage.write_rss(b, s)  # bot, server
-
-
-async def scrape_twitch(b, s, r):
-    stream = None
-    try:
-        stream = await global_util.twitch.get_stream(r.uid)
-    except ValueError as e:
-        print(e)
-    if stream:
-        if (str(stream['stream']['_id']) != str(r.last_id)) and (str(r.last_id) != 'h') and (
-                    str(r.last_id) != 'd'):
-            global_util.proxy_message(b, r.channel_id,
-                                      '{} is now streaming!\nhttps://www.twitch.tv/{}'
-                                      ''.format(str(r.title), r.user))
-            r.last_id = str(stream['stream']['_id'])
-            storage.write_rss(b, s)  # bot, server
+        elif isinstance(old_feed, YouTubeFeed):
+            await bot.send_message(old_feed.discord_channel_id,
+                                   '@everyone\n{} has a new video!\n'
+                                   'https://www.youtube.com/watch?v={}'
+                                   ''.format(old_feed.title, old_feed.last_video_id))
+        # write to storage after all of these
     else:
-        if str(r.last_id) == 'h':
-            global_util.proxy_message(b.bot, r.channel_id,
-                                      'Twitch feed for {} has now been enabled. Here is the most '
-                                      'recent activity:\nhttps://www.twitch.tv/{}'
-                                      ''.format(str(r.title), r.user))
-            r.last_id = '111000'  # doesn't matter what this is
-            storage.write_rss(b, s)
+        server.feeds.append(new_feed)
+        storage.write_feeds(server)
+
+
+async def send_first_update(bot: DiscordBot, server, feed: RssFeed):
+    feed.first_time = False
+    if isinstance(feed, TwitterFeed):
+        await bot.send_message(feed.discord_channel_id,
+                               'Twitter feed for `@{0}` has now been enabled.\n'
+                               'https://twitter.com/{0}/status/{1}'
+                               ''.format(feed.handle, feed.last_tweet_id))
+
+    elif isinstance(feed, TwitchFeed):
+        await bot.send_message(feed.discord_channel_id,
+                               'Twitch feed for {} has now been enabled. Here is the most '
+                               'recent activity:\nhttps://www.twitch.tv/{}'
+                               ''.format(feed.title, feed.last_stream_id))
+
+    elif isinstance(feed, YouTubeFeed):
+        await bot.send_message(feed.discord_channel_id,
+                               'Youtube feed for {} has now been enabled. All future '
+                               'updates will now push `@everyone` mentions for '
+                               'visibility. Here is the most recent video for this'
+                               'channel:\n'
+                               'https://www.youtube.com/watch?v={}'
+                               ''.format(feed.title, feed.last_video_id))
 
 
 def setup(bot):

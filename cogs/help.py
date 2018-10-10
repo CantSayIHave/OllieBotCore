@@ -172,8 +172,6 @@ async def send_help(bot, author: discord.User, command: str, detail=None):
             color = random.randint(0, 0xffffff)
             icon = help_icon
 
-
-
     else:
         help_message = 'Command `{}` has no help documentation or does not exist.'.format(command)
         name = 'Help Error'

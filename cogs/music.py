@@ -1,4 +1,4 @@
-import storage_manager as storage
+import storage_manager_v2 as storage
 from discordbot import DiscordBot
 from music_queue import *
 from util.global_util import *
@@ -13,7 +13,7 @@ class Music:
         async def music(ctx):
             pass
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['p'])
         async def play(ctx, *, arg: str = None):
 
             if not ctx.message.server:
@@ -21,6 +21,8 @@ class Music:
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
 
             if arg is None:
                 if in_server.music.unpause():
@@ -42,7 +44,7 @@ class Music:
 
             await in_server.music.play_next(ctx, in_server, self.bot)
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['q'])
         async def queue(ctx, *, arg: str = None):
 
             if not arg:
@@ -53,6 +55,8 @@ class Music:
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
 
             if arg == 'clear':
                 if not self.bot.has_high_permissions(ctx.message.author, in_server):
@@ -127,9 +131,9 @@ class Music:
                         global admins
                         await self.bot.say('Search failed. Please report to <@{}>'.format(admins[0]))  # admin, ie me
 
-            storage.write_music(self.bot, in_server)
+            storage.write_music(in_server)
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['pa', 'ps'])
         async def pause(ctx):
 
             if not ctx.message.server:
@@ -138,12 +142,14 @@ class Music:
 
             in_server = self.bot.get_server(server=ctx.message.server)
 
+            self.handle_bindings(ctx, in_server)
+
             if in_server.music.pause():
                 await self.bot.say('Music paused :play_pause:')
             else:
                 await self.bot.say('Music is already paused')
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['r'])
         async def resume(ctx):
 
             if not ctx.message.server:
@@ -152,12 +158,14 @@ class Music:
 
             in_server = self.bot.get_server(server=ctx.message.server)
 
+            self.handle_bindings(ctx, in_server)
+
             if in_server.music.unpause():
                 await self.bot.say('Music resumed :play_pause:')  # play after pause
             else:
                 await self.bot.say('Music is already playing')
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['s', 'sk'])
         async def skip(ctx):
             """if not self.self.bot.has_high_permissions(ctx.message.author):
                 return"""
@@ -167,6 +175,8 @@ class Music:
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
 
             bot_vc = in_server.music.bot_voice_client  # type: discord.VoiceClient
 
@@ -203,7 +213,7 @@ class Music:
                 await self.bot.say('Track skipped :fast_forward:')
                 await in_server.music.skip()
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['d', 'dis'])
         async def disconnect(ctx):
 
             if not ctx.message.server:
@@ -211,6 +221,9 @@ class Music:
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
+
             on_vc = self.bot.voice_client_in(ctx.message.server)
             if on_vc:
                 try:
@@ -226,7 +239,7 @@ class Music:
             else:
                 await self.bot.say('Not connected to a voice channel')
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['sh'])
         async def shuffle(ctx):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
@@ -236,7 +249,7 @@ class Music:
                 random.shuffle(in_server.music.queue)
             await self.bot.say('Queue shuffled :twisted_rightwards_arrows:')
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['se'])
         async def search(ctx, *, arg):
 
             if not ctx.message.server:
@@ -244,6 +257,8 @@ class Music:
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
 
             results = None
             try:
@@ -282,8 +297,7 @@ class Music:
                 channel = ctx.message.channel
 
             in_server.music.bind_chat = channel.id
-            in_server.music_chat = channel.id
-            storage.write_server_data(self.bot, in_server)
+            storage.write_server_data(in_server)
 
             await self.bot.say('Bound music commands to {0}'.format(channel.mention))
 
@@ -298,19 +312,20 @@ class Music:
             if not self.bot.has_high_permissions(ctx.message.author, in_server):
                 return
 
-            in_server.music_chat = None
             in_server.music.bind_chat = None
-            storage.write_server_data(self.bot, in_server)
+            storage.write_server_data(in_server)
 
             await self.bot.say('Unbound music commands.')
 
-        @music.command(pass_context=True)
+        @music.command(pass_context=True, aliases=['c'])
         async def current(ctx):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
 
             in_server = self.bot.get_server(server=ctx.message.server)
+
+            self.handle_bindings(ctx, in_server)
 
             if not in_server.music.player:
                 await self.bot.say('There are no songs currently playing.')
@@ -366,6 +381,14 @@ class Music:
                       "Example: `{0}music p home resonance`\n"
 
             await self.bot.send_message(ctx.message.author, out_str.format(self.bot.command_prefix))
+
+    def handle_bindings(self, ctx, server):
+        """Block commands if outside a bound music channel"""
+        if server.music.bind_chat:
+            perm = self.bot.has_high_permissions(ctx.message.author)
+
+            if server.music.bind_chat != ctx.message.channel.id and not perm:
+                raise discord.Forbidden
 
     @staticmethod
     def shorten_str(word: str, new_length: int):

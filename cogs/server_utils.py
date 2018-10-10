@@ -2,46 +2,12 @@ import asyncio
 import os
 from base64 import b64encode
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from discordbot import DiscordBot
 from util.global_util import *
 import util.command_util as command_util
 
 # custom help dict to hold data on command accessibility
-help_args = {
-    'audioconvert': {'d': 'convert audio to different format', 'm': False},
-    'clear': {'d': 'clear bot messages', 'm': True},
-    'cat': {'d': 'summon a cat', 'm': False},
-    'b-ify': {'d': 'add some 🅱️ to text', 'm': False},
-    'bigtext': {'d': 'transform text into regional indicators', 'm': False},
-    'block': {'d': 'block any command from non-mods', 'm': True},
-    'bun': {'d': 'summon a bun', 'm': False},
-    'emotes': {'d': 'suggest server emotes to the mods', 'm': False},
-    'good': {'d': 'easy way to check if bot is online', 'm': True},
-    'getraw': {'d': 'get raw text from a message', 'm': True},
-    'imageconvert': {'d': 'convert image to different format', 'm': False},
-    'info': {'d': 'get bot info', 'm': False},
-    'music': {'d': 'manage/play music from youtube', 'm': False},
-    'perm': {'d': 'set user permissions', 'm': True},
-    'purge': {'d': 'mass-clear messages', 'm': True},
-    'playing': {'d': "set bot's 'playing' message", 'm': True},
-    'prefix': {'d': "set bot's command prefix", 'm': True},
-    'quote': {'d': 'manage/call quotes', 'm': True},
-    'react': {'d': 'react to a message with bigtext', 'm': False},
-    'reee': {'d': 'manage autistic screaming response', 'm': True},
-    'response': {'d': 'manage custom responses', 'm': True},
-    'roles': {'d': 'automate mass roll assignments', 'm': True},
-    'roll': {'d': 'dice roller', 'm': False},
-    'rss': {'d': 'manage rss feeds for each channel', 'm': True},
-    'spamtimer': {'d': 'set spam timer for quotes', 'm': True},
-    'think': {'d': 'really makes you think', 'm': False},
-    'thinke': {'d': 'really makes you think about emotes', 'm': False},
-    'thinkpfp': {'d': 'really makes you think about pfps', 'm': False},
-    'unblock': {'d': 'unblock commands', 'm': True},
-    'userjoin': {'d': 'manage message to new users', 'm': True},
-    'ytdl': {'d': 'youtube to mp3 converter', 'm': True},
-    'wiki': {'d': 'search Wikipedia for something', 'm': False},
-    'woof': {'d': 'summon a woof', 'm': False}}
 
 
 class ServerUtils:
@@ -78,7 +44,7 @@ class ServerUtils:
 
             if arg == 'message' and msg:
                 in_server.join_message = msg
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Set join message to `{}`'.format(in_server.join_message))
                 return
             elif arg == 'message' and not msg:
@@ -87,11 +53,11 @@ class ServerUtils:
 
             if arg == 'channel' and ctx.message.channel_mentions:
                 in_server.join_channel = ctx.message.channel_mentions[0].id
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Set join message channel to {}'.format(ctx.message.channel_mentions[0].mention))
             elif arg == 'channel' and not ctx.message.channel_mentions:
                 in_server.join_channel = ctx.message.channel.id
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Set join message channel to {}'.format(ctx.message.channel.mention))
 
         @self.bot.group(pass_context=True)
@@ -142,7 +108,7 @@ class ServerUtils:
 
             if member.id not in in_server.mods:
                 in_server.mods.append(member.id)
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Added {} to the mod list'.format(member.mention))
             else:
                 await self.bot.say('{} is already a mod'.format(member.mention))
@@ -160,7 +126,7 @@ class ServerUtils:
 
             try:
                 in_server.mods.remove(member.id)
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Removed {} from the mod list'.format(member.mention))
             except Exception:
                 await self.bot.say('{} is not on the mod list'.format(member.mention))
@@ -219,7 +185,7 @@ class ServerUtils:
 
             elif arg == 'clear':
                 in_server.rolemods.clear()
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Cleared rolemods.')
                 return
 
@@ -231,12 +197,12 @@ class ServerUtils:
             if role:
                 if arg == 'add':
                     in_server.rolemods.append(role.id)
-                    storage.write_server_data(self.bot, in_server)
+                    storage.write_server_data(in_server)
                     await self.bot.say('Added role {} to role mod list'.format(role.mention))
                 elif arg == 'remove':
                     if role.id in in_server.rolemods:
                         in_server.rolemods.remove(role.id)
-                        storage.write_server_data(self.bot, in_server)
+                        storage.write_server_data(in_server)
                         await self.bot.say('Removed role {} from role mod list'.format(role.mention))
                     else:
                         await self.bot.say('Role {} is not on the role mod list'.format(role.mention))
@@ -288,27 +254,27 @@ class ServerUtils:
                 return
 
             if not cmd:
-                if in_server.command_delay == 1:
+                if in_server.spam_time == 1:
                     await self.bot.say('Current anti-spam timer is 1 minute')
                 else:
-                    await self.bot.say('Current anti-spam timer is ' + str(in_server.command_delay) + ' minutes')
+                    await self.bot.say('Current anti-spam timer is ' + str(in_server.spam_time) + ' minutes')
             else:
                 if cmd == 'set' and arg:
                     arg = int(arg)
                     if arg < 0:
                         arg = 0
-                    in_server.command_delay = arg
-                    storage.write_bot(self.bot)  # Necessary to save command delay
+                    in_server.spam_time = arg
+                    storage.write_server_data(in_server)  # Necessary to save command delay
                     await self.bot.say('Set anti-spam timer to ' + str(arg) + ' minutes')
 
                 elif cmd == 'add' and arg:
                     in_server.spam_timers[arg] = 0
-                    storage.write_server_data(self.bot, in_server)
+                    storage.write_server_data(in_server)
                     await self.bot.say('Added {} to spam timer list'.format(arg))
 
                 elif cmd == 'remove' and arg:
                     in_server.spam_timers.pop(arg, None)
-                    storage.write_server_data(self.bot, in_server)
+                    storage.write_server_data(in_server)
                     await self.bot.say('Removed {} from spam timer list'.format(arg))
 
                 elif cmd == 'listall':
@@ -385,16 +351,16 @@ class ServerUtils:
 
             if arg == 'all' and arg2:
                 in_server.block_list.append(BlockItem(name=arg2, channel='all'))
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Added {} to the list of blocked commands for all channels.'.format(arg2))
             elif arg == 'here' and arg2:
                 in_server.block_list.append(BlockItem(name=arg2, channel=ctx.message.channel.id))
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Added {} to the list of blocked commands for {}.'.format(arg2,
                                                                                              ctx.message.channel.mention))
             elif channel_arg:
                 in_server.block_list.append(BlockItem(name=arg2, channel=channel_arg.id))
-                storage.write_server_data(self.bot, in_server)
+                storage.write_server_data(in_server)
                 await self.bot.say('Added {} to the list of blocked commands for {}.'.format(arg2, channel_arg.mention))
 
             if not arg2:
@@ -435,19 +401,19 @@ class ServerUtils:
                 if cmd.name == arg2:
                     if arg == 'all' and cmd.channel == 'all':
                         in_server.block_list.remove(cmd)
-                        storage.write_server_data(self.bot, in_server)
+                        storage.write_server_data(in_server)
                         await self.bot.say('Removed {} from block list for all channels.'.format(arg2))
                         return
                     elif arg == 'here' and cmd.channel == ctx.message.channel.id:
                         in_server.block_list.remove(cmd)
-                        storage.write_server_data(self.bot, in_server)
+                        storage.write_server_data(in_server)
                         await self.bot.say('Removed {} from block list for {}.'.format(arg2,
                                                                                        ctx.message.channel.mention))
                         return
                     elif channel_arg:
                         if cmd.channel == channel_arg.id:
                             in_server.block_list.remove(cmd)
-                            storage.write_server_data(self.bot, in_server)
+                            storage.write_server_data(in_server)
                             await self.bot.say('Removed {} from block list for {}.'.format(arg2, channel_arg.mention))
                             return
 
@@ -611,36 +577,6 @@ class ServerUtils:
             pass
 
         @emotes.command(pass_context=True)
-        async def suggest(ctx, link: str = None):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = self.bot.get_server(server=ctx.message.server)
-
-            if link is not None:
-                if link[:4] != 'http':
-                    await self.bot.say('Sorry, but that is not a valid link. Please provide form '
-                                       '`http(s):\\\\...`')
-                    return
-                in_server.suggest_emotes.append(link)
-                await self.bot.say('Added link to emote suggestions')
-                return
-            else:
-                await asyncio.sleep(1)
-                if ctx.message.attachments:
-                    try:
-                        if ctx.message.attachments[0]:
-                            add_url = ctx.message.attachments[0]['url']
-                            if add_url:
-                                in_server.suggest_emotes.append(add_url)
-                                await self.bot.say('Added image to emote suggestions')
-                                return
-                    except IndexError:
-                        pass
-                await self.bot.say('No image detected in message. Please upload image as part of command message')
-
-        @emotes.command(pass_context=True)
         async def add(ctx, name: str, link: str = None, arg: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
@@ -726,40 +662,6 @@ class ServerUtils:
                             'No image detected in message. Please upload image as part of command message')
 
         @emotes.command(pass_context=True)
-        async def listall(ctx):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = self.bot.get_server(server=ctx.message.server)
-
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if len(in_server.suggest_emotes) == 0:
-                await self.bot.say('No suggestions found')
-
-            out_str = "**Suggested emotes:**\n"
-            for url in in_server.suggest_emotes:
-                out_str += '`{0}`\n'.format(url)
-            await self.bot.say(out_str)
-            return
-
-        @emotes.command(pass_context=True)
-        async def clear(ctx):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = self.bot.get_server(server=ctx.message.server)
-
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
-
-            in_server.suggest_emotes.clear()
-            await self.bot.say('Emote suggestions cleared')
-
-        @emotes.command(pass_context=True)
         async def steal(ctx, arg: str, new_name: str = None, location: str = None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
@@ -804,25 +706,13 @@ class ServerUtils:
         async def help(ctx):
             out_str = "**Emotes usage:**\n"
             if self.bot.has_high_permissions(ctx.message.author):
-                out_str += '`{0}emotes <suggest> [link]`\n' \
-                           '`{0}emotes <suggest> (upload image in message)`\n' \
-                           '`{0}emotes <add> <name> [link]`\n' \
+                out_str += '`{0}emotes <add> <name> [link]`\n' \
                            '`{0}emotes <add> <name> (upload image in message)`\n' \
-                           '`{0}emotes <list/clear>`\n' \
                            '*Note: `add`, `list` and `clear` are only visible to and usable by mods\n' \
                            'This is a method for suggesting emotes to the ' \
                            'moderators and adding custom emoji to the server.\n' \
                            '`[link]` should be the full web ' \
                            'address to the image. `suggest/add` ' \
-                           'may be called without a link as long as an image ' \
-                           'is uploaded within the ' \
-                           'message'.format(self.bot.command_prefix)
-            else:
-                out_str += '`{0}emotes <suggest> [link]`\n' \
-                           '`{0}emotes <suggest> (upload image in message)`\n' \
-                           'This is a method for suggesting emotes to the ' \
-                           'moderators. `[link]` should be the full web ' \
-                           'address to the image. This command ' \
                            'may be called without a link as long as an image ' \
                            'is uploaded within the ' \
                            'message'.format(self.bot.command_prefix)
@@ -1074,7 +964,7 @@ class ServerUtils:
             except discord.Forbidden:
                 await self.bot.say("I don't have permission for that")
 
-        @self.bot.command(pass_context=True)
+        @self.bot.command(pass_context=True, aliases=['nickall', 'nick-all'])
         async def nick_all(ctx, new_name: str):
             if not ctx.message.server:
                 return
@@ -1199,7 +1089,7 @@ class ServerUtils:
                 in_server.leave_channel = channel.id
                 await self.bot.say('Leave messages set to channel {}'.format(channel.mention))
 
-            storage.write_server_data(self.bot, in_server)
+            storage.write_server_data(in_server)
 
         @self.bot.command(pass_context=True)
         @self.bot.test_high_perm
@@ -1212,7 +1102,7 @@ class ServerUtils:
                     server.default_role = None
                     await self.bot.say('Cleared default role ✅')
 
-                storage.write_server_data(self.bot, server)
+                storage.write_server_data(server)
             else:
                 d_role = iterfind(ctx.message.server.roles, lambda x: x.id == server.default_role)
                 if d_role:
@@ -1220,7 +1110,7 @@ class ServerUtils:
                 else:
                     await self.bot.say('No default role is currently set.')
                     server.default_role = None
-                    storage.write_server_data(self.bot, server)
+                    storage.write_server_data(server)
 
     @staticmethod
     def replace_color(img: Image.Image, color: int, variance: int):
