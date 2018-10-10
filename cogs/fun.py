@@ -10,8 +10,10 @@ from wikipedia import DisambiguationError
 from wikipedia import PageError
 import pyfiglet
 import timestring
+import insultgen
+from googletrans import Translator
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from apis.strawpoll import *
 from discordbot import DiscordBot
 from util import global_util, command_util
@@ -31,6 +33,7 @@ num2regional = {0: '0⃣',
 regional2num = {v: k for k, v in num2regional.items()}
 
 fig_fonts = pyfiglet.FigletFont.getFonts()
+translator = Translator()
 
 
 class Fun:
@@ -38,46 +41,30 @@ class Fun:
         self.bot = bot
 
         @self.bot.command(pass_context=True)
-        async def reee(ctx, arg: str = None, *, msg: str = None):
-            if arg == 'help':
-                await self.bot.send_message(ctx.message.author, "**Reee usage**:\n"
-                                                                "Set reee on/off: `{0}reee <true/false>`\n"
-                                                                "Get reee state: `{0}reee`\n"
-                                                                'Set reee response: `{0}reee <response> [response]`\n'
-                                                                'Get reee response: `{0}reee <response>`'.format(
-                    self.bot.command_prefix))
-                return
-
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
-
-            in_server = self.bot.get_server(ctx.message.server)
-
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
+        @self.bot.test_high_perm
+        async def reee(server, ctx, arg: str = None, *, msg: str = None):
 
             if arg is None:
-                await self.bot.say('reee is set to ' + str(in_server.reee).lower())
+                await self.bot.say('reee response is set to **{}**'.format(bool(server.reee_message)))
                 return
 
             if arg.lower() == 'true':
-                in_server.reee = True
-                await self.bot.say('reee set to true')
+                server.reee_message = True
+                await self.bot.say('reee response set to true')
                 return
             elif arg.lower() == 'false':
-                in_server.reee = False
-                await self.bot.say('reee set to false')
+                server.reee_message = False
+                await self.bot.say('reee response set to false')
                 return
 
-            if arg == 'response' and msg is None:
-                await self.bot.say('reee response is set to `{0}`'.format(in_server.reee_message))
+            if arg == 'message' and msg is None:
+                await self.bot.say('reee message is set to `{0}`'.format(server.reee_message))
                 return
 
-            if arg == 'response' and msg is not None:
-                in_server.reee_message = msg
-                storage.write_server_data(self.bot, in_server)
-                await self.bot.say('reee response now set to `{0}`'.format(in_server.reee_message))
+            if arg == 'message' and msg is not None:
+                server.reee_message = msg
+                storage.write_server_data(server)
+                await self.bot.say('reee message now set to `{0}`'.format(server.reee_message))
 
         @self.bot.command(pass_context=True)
         async def good(ctx, noun: str = None):
@@ -99,26 +86,21 @@ class Fun:
 
             if arg is None:
                 await self.bot.say('no u')
-            if arg == 'bot':
+            elif arg == 'bot':
                 await self.bot.say('{0} bad human'.format(ctx.message.author.mention))
             elif arg == 'human':
                 await self.bot.say('{0} BAD FELLOW HUMAN AS WELL'.format(ctx.message.author.mention))
             elif arg == 'help':
                 await self.bot.say("Well I'm more help than you 😤")
+            else:
+                insult = insultgen.generate()
+                if random.choice((True, False)):
+                    insult = insult.upper()
+                await self.bot.say(insult)
 
         @self.bot.command(pass_context=True)
-        async def playing(ctx, *, message: str):
-            if not self.bot.has_high_permissions(ctx.message.author):
-                return
-
-            if message == 'help':
-                await self.bot.send_message(ctx.message.author, '**Playing usage**: `{0}playing [thing]`\n'
-                                                                "Changes bot's `playing` status\n"
-                                                                'Argument does not need quotes\n'
-                                                                'Example: `{0}playing with carrots`'.format(
-                    self.bot.command_prefix))
-                return
-
+        @self.bot.test_high_perm
+        async def playing(server, ctx, *, message: str):
             self.bot.playing_message = message
             storage.write_bot_data(self.bot)
 
@@ -126,17 +108,9 @@ class Fun:
             await self.bot.say('Changed `playing` status to `{0}`'.format(message))
 
         @self.bot.command(pass_context=True)
-        async def presence(ctx, type: str, *, message: str):
+        @self.bot.test_high_perm
+        async def presence(server, ctx, type: str, *, message: str):
             if not self.bot.has_high_permissions(ctx.message.author):
-                return
-
-            if message == 'help':
-                await self.bot.send_message(ctx.message.author, '**Presence usage:**\n'
-                                                                '`{0}presence [type] [value]`\n'
-                                                                "Changes bot's presence, ie `playing`\n"
-                                                                '`type` can be `playing`, `streaming`, or `listening`\n'
-                                                                'Example: `{0}presence playing with carrots`'.format(
-                                                                    self.bot.command_prefix))
                 return
 
             presence_types = {'playing': 0, 'game': 0, 'streaming': 1, 'listening': 2}
@@ -383,7 +357,7 @@ class Fun:
 
                 member = command_util.find_arg(ctx, member, ['member'])
                 if type(member) is not discord.Member:
-                    member = await command_util.find_member(ctx, member, percent=50)
+                    member = await command_util.find_member(ctx, member, percent=50, return_name=False)
 
             if not member:
                 member = ctx.message.author
@@ -406,7 +380,7 @@ class Fun:
             if member:
                 member = command_util.find_arg(ctx, member, ['member'])
                 if type(member) is not discord.Member:
-                    member = await command_util.find_member(ctx, member, percent=50)
+                    member = await command_util.find_member(ctx, member, percent=50, return_name=False)
 
             if not member:
                 member = ctx.message.author
@@ -835,20 +809,16 @@ class Fun:
             await self.bot.say(embed=em)
 
         @self.bot.command(pass_context=True)
-        async def late(ctx, arg: str = None, to_set: int = None):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
+        @self.bot.test_high_perm
+        async def late(server, ctx, arg: str = None, to_set: int = None):
 
-            in_server = self.bot.get_server(ctx.message.server.id)
-
-            if in_server.name != 'Shoe0nHead':
+            if server.name != 'Shoe0nHead':
                 return
 
             is_admin = self.bot.check_admin(ctx.message.author)
 
             if not arg:
-                if not in_server.late:
+                if not server.late:
                     choice = random.randint(0, 4)
                     if choice == 0:
                         minutes = random.randint(0, 10)
@@ -863,16 +833,16 @@ class Fun:
                     else:
                         await self.bot.say('Shoe is now {} minutes late'.format(minutes))
                 else:
-                    minutes = int((time.time() - in_server.late) / 60)
+                    minutes = int((time.time() - server.late) / 60)
                     await self.bot.say('Shoe is now {} minutes late'.format(minutes))
             elif arg == 'start' and is_admin:
-                in_server.late = time.time()
+                server.late = time.time()
                 await self.bot.say('Late timer started.')
             elif arg == 'stop' and is_admin:
-                in_server.late = None
+                server.late = None
                 await self.bot.say('Late timer stopped.')
             elif arg == 'set' and to_set and is_admin:
-                in_server.late = time.time() - (to_set * 60)
+                server.late = time.time() - (to_set * 60)
                 await self.bot.say('Late timer set to {}.'.format(to_set))
 
         @self.bot.command(pass_context=True)
@@ -1212,12 +1182,17 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def hug(ctx, *, arg: str = None):
-            member = command_util.find_arg(ctx, arg, ['member'])
+            member_name = None
 
-            if type(member) is str:
-                member_name = await command_util.find_member(ctx, member, percent=50, return_name=False)
-            else:
-                member_name = member.display_name
+            if arg:
+                member = command_util.find_arg(ctx, arg, ['member'])
+
+                if type(member) is str:
+                    member_name = await command_util.find_member(ctx, member, percent=50, return_name=True)
+                    if not member_name:
+                        member_name = arg
+                else:
+                    member_name = member.display_name
 
             image = random.choice(global_util.hug_library)
 
@@ -1229,7 +1204,7 @@ class Fun:
                            '**{1}** hugs **{0}**',
                            '**{1}** gives **{0}** a hug']
 
-            if arg:
+            if member_name:
                 desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
             else:
                 desc = random.choice(single_options).format(ctx.message.author.name)
@@ -1241,24 +1216,17 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def pat(ctx, *, arg: str = None):
+            member_name = None
 
-            member_name = ''
+            if arg:
+                member = command_util.find_arg(ctx, arg, ['member'])
 
-            member = command_util.find_arg(ctx, arg, ['member'])
-
-            if type(member) is str:
-                member = await command_util.find_member(ctx, member, percent=50)
-
-                if type(member) is discord.Member and arg:
-                    if arg.lower() in member.name.lower():
-                        member_name = member.name
-                    elif arg.lower() in member.display_name.lower():
-                        member_name = member.display_name
-
+                if type(member) is str:
+                    member_name = await command_util.find_member(ctx, member, percent=50, return_name=True)
+                    if not member_name:
+                        member_name = arg
                 else:
-                    member_name = arg
-            else:
-                member_name = member.display_name
+                    member_name = member.display_name
 
             image = random.choice(global_util.pat_library)
 
@@ -1270,7 +1238,7 @@ class Fun:
                            '**{1}** pats **{0}**',
                            '**{1}** gives **{0}** headpats']
 
-            if arg:
+            if member_name:
                 desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
             else:
                 desc = random.choice(single_options).format(ctx.message.author.name)
@@ -1290,6 +1258,10 @@ class Fun:
                     for url in link.split(' @r '):
                         if url not in global_util.hug_library:
                             global_util.hug_library.append(url)
+                elif '\n' in link:
+                    for url in link.split('\n'):
+                        if url not in global_util.hug_library:
+                            global_util.hug_library.append(url)
                 else:
                     global_util.hug_library.append(link)
             elif arg.startswith('rem'):
@@ -1307,6 +1279,10 @@ class Fun:
             if arg == 'add':
                 if ' @r ' in link:
                     for url in link.split(' @r '):
+                        if url not in global_util.pat_library:
+                            global_util.pat_library.append(url)
+                elif '\n' in link:
+                    for url in link.split('\n'):
                         if url not in global_util.pat_library:
                             global_util.pat_library.append(url)
                 else:
@@ -1330,7 +1306,7 @@ class Fun:
 
             await self.bot.say('I pick **{}**'.format(chosen))
 
-        @self.bot.command(pass_context=True)
+        @self.bot.command(pass_context=True, aliases=['eight-ball', '8ball', 'eb'])
         async def eight_ball(ctx, *, arg: str):
             choice_im = await olliebot_api.get_eight_ball()
 
@@ -1340,7 +1316,7 @@ class Fun:
 
             await self.bot.send_message(ctx.message.channel, embed=em)
 
-        @self.bot.command(pass_context=True)
+        @self.bot.command(pass_context=True, aliases=['colour'])
         async def color(ctx, arg: str, green: int = None, blue: int = None):
 
             if arg == 'help':
@@ -1410,10 +1386,6 @@ class Fun:
                                          filename='color.png')
 
         @self.bot.command(pass_context=True)
-        async def colour(ctx, *, arg: str = None):
-            await self.bot.say('Oopsie! Looks like you misspelled **color** 😄')
-
-        @self.bot.command(pass_context=True)
         async def textart(ctx, *, arg: str):
 
             font = 'standard'
@@ -1454,7 +1426,7 @@ class Fun:
                 return
             bd = in_server.add_birthday(user=user, dt=dt)
 
-            storage.write_birthdays(self.bot, in_server)
+            storage.write_birthdays(in_server)
 
             await self.bot.say('Added birthday for **{}** as {}'.format(user.name, bd.dt.strftime('%B %-d')))
 
@@ -1474,7 +1446,7 @@ class Fun:
 
             bd.dt = dt
 
-            storage.write_birthdays(self.bot, in_server)
+            storage.write_birthdays(in_server)
 
             await self.bot.say('Changed birthday for **{}** to {}'.format(user.name, bd.dt.strftime('%B %-d')))
 
@@ -1488,7 +1460,7 @@ class Fun:
 
             in_server.birthdays.remove(bd)
 
-            storage.write_birthdays(self.bot, in_server)
+            storage.write_birthdays(in_server)
 
             await self.bot.say('Removed birthday for **{}**'.format(user.name))
 
@@ -1536,6 +1508,16 @@ class Fun:
                 em.add_field(name=names[:-2], value=global_util.CHAR_ZWS)  # add names up to last ', '
 
                 await self.bot.send_message(ctx.message.channel, embed=em)
+
+        @self.bot.command(pass_context=True)
+        async def clap(ctx, *, arg: str):
+            output = ''.join([x + '👏' for x in arg.split(' ')])
+            await self.bot.say(output[:1999])
+
+        @self.bot.command(pass_context=True, aliases=['blap'])
+        async def bclap(ctx, *, arg: str):
+            output = ''.join([x + '👏🏿' for x in arg.split(' ')])
+            await self.bot.say(output[:1999])
 
     @staticmethod
     def is_num(text: str):
