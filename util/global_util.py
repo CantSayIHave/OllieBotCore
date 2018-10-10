@@ -7,6 +7,7 @@ from collections import deque, OrderedDict
 
 import twitter
 from PIL import Image
+# from googletrans import Translator
 
 from api_keys import *
 from apis import twitch_rss
@@ -311,6 +312,8 @@ DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 with open('resources/emoji_alphabet.json', 'r', encoding='utf8') as f:
     emoji_alphabet = json.load(f)
 
+
+# |--------------[ API Setup ]--------------|
 twitter_api = twitter.Api(consumer_key=TWITTER_CONSUMER_KEY,
                           consumer_secret=TWITTER_CONSUMER_SECRET,
                           access_token_key=TWITTER_TOKEN_KEY,
