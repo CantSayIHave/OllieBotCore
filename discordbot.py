@@ -10,10 +10,11 @@ import discord
 from discord.ext import commands
 
 import server
-import storage_manager as storage
+import storage_manager_v2 as storage
 from cogs import responses, sense, help
 from util import global_util
 import util.scheduler as scheduler
+from util import command_util
 
 """
 Breaking Changes:
@@ -28,21 +29,15 @@ fix all self references
 
 replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]  # need to put this in utils
 
-command_mappings = {'b-ify': 'b_ify',
-                    'nick-all': 'nick_all',
-                    '8ball': 'eight_ball',
-                    'eightball': 'eight_ball',
-                    'ps': 'photoshop'}
-
 
 class DiscordBot(commands.Bot):
     def __init__(self, formatter=None, pm_help=False, **options):
         self.name = options.get('name', 'Default')
-        self.local_servers = options.get('servers', [])
+        self.local_servers = options.get('local_servers', [])
         self.token = options.get('token', '')
         self.desc = options.get('desc', 'No desc')
         self.prefix = options.get('prefix', '.')
-        self.playing_message = options.get('playing_msg', '{}help [command]'.format(self.prefix))
+        self.playing_message = options.get('playing_message', '{}help [command]'.format(self.prefix))
         self.admins = options.get('admins', [])
         self.bot_list = options.get('bot_list', [])
 
@@ -74,14 +69,23 @@ class DiscordBot(commands.Bot):
 
         @self.event  # ---------------------- Main Message Entry ---------------------- #
         async def on_message(message):
+
             global_util.exit_timer = 0
 
             # bot should not read own or other bot messages
             if message.author == self.user or message.author.bot:
                 return
 
-            # cant have be a command without content ¯\_(ツ)_/¯
+            if message.channel.id == '498444135615692820':
+                if message.attachments or message.embeds:
+                    await self.add_reaction(message, '👍')
+                    await self.add_reaction(message, '👎')
+
+            # cant have a command without content ¯\_(ツ)_/¯
             if not message.content:
+                return
+
+            if '@everyone' in message.content:  # update with perms later
                 return
 
             if message.author.id == '340747290849312768':  # eggy
@@ -103,14 +107,14 @@ class DiscordBot(commands.Bot):
             if message.content.find(self.command_prefix) == 0:
                 message.content = re.sub(r'( list)\b', ' listall', message.content)  # type:str
 
-            # Avoid server-related content if in direct message
+            # |------------[ Direct Message Branching ]------------|
             if not message.server:
 
-                message.content = self.map_commands(self.char_swaps(message.content))
+                message.content = self.char_swaps(message.content)
 
                 await help.intercept_help(message, self)
 
-                # treat all commands as lowercase
+                # treat all commands as first-word lowercase
                 message.content = self.command_lowercase(message.content)
 
                 await self.process_commands(message)
@@ -120,50 +124,32 @@ class DiscordBot(commands.Bot):
 
                 return
 
-            if not self.get_server(name=message.server.name):  # server auto-add and name change update
-                real_server = self.get_server(message.server)
-                if real_server:
-                    real_server.name = message.server.name  # handle server name changes
-                    storage.write_bot(self)
-                else:
-                    new_server = server.Server(name=message.server.name,
-                                        mods=[message.server.owner.id],
-                                        command_delay=1,
-                                        id=message.server.id)
-                    self.local_servers.append(new_server)
-                    storage.write_bot(self)
+            # |------------[ Server Command Processing ]------------|
 
-            in_server = self.get_server(message.server)
+            await self.handle_manage_servers(message)  # update old server name and auto-add new
 
+            in_server = self.get_server(server=message.server)
             high_perm = self.has_high_permissions(message.author, in_server)
 
+            # |------------[ Special Admin Command Prefixes ]------------|
             await self.handle_tag_prefixes(message, perms=high_perm)
 
-            if await self.handle_blocked(message, in_server, perms=high_perm):
+            # |------------[ Command Blocking ]------------|
+            if await self.handle_blocked(message, in_server, perms=high_perm):  # return if this is blocked cmd
                 return
 
-            message.content = self.map_commands(self.char_swaps(message.content))
-
-            await help.intercept_help(message, self)  # intercept help
+            # |------------[ Content Operations ]------------|
+            message.content = self.char_swaps(message.content)  # swap common chars like unicode quotes
 
             content_lower = message.content.lower()  # type: str
 
-            await self.find_reee(content_lower, message, in_server)
+            # |------------[ Command Interceptions / Alt Systems ]------------|
+            if await help.intercept_help(message, self):  # intercept help
+                return
 
             await responses.execute_responses(message, self, in_server, content_lower=content_lower)
 
-            # shortened music commands
-            if content_lower.find('{0}music'.format(self.command_prefix)) == 0:
-
-                if in_server.music_chat:
-                    if (message.channel.id != in_server.music_chat) and not high_perm:
-                        return
-
-                command_list = message.content.split(' ')
-                if len(command_list) > 1:
-                    if command_list[1] in global_util.music_commands:
-                        command_list[1] = global_util.music_commands[command_list[1]]
-                        message.content = ' '.join(command_list)
+            await self.find_reee(content_lower, message, in_server)
 
             await self.handle_default_reactions(content_lower, message)
 
@@ -172,7 +158,7 @@ class DiscordBot(commands.Bot):
             if self.debug_timer:
                 self.debug_timer = self.get_micros()
 
-            # treat all commands as lowercase
+            # treat all commands as first-word lowercase
             message.content = self.command_lowercase(message.content)
 
             await self.process_commands(message)
@@ -217,7 +203,7 @@ class DiscordBot(commands.Bot):
                         print('Role adding disallowed for server {}'.format(in_server.name))
                 else:
                     in_server.default_role = None
-                    storage.write_server_data(self, in_server)
+                    storage.write_server_data(in_server)
 
         @self.event
         async def on_member_remove(member):
@@ -232,8 +218,11 @@ class DiscordBot(commands.Bot):
 
             await self.send_message(discord.Object(id=in_server.leave_channel), out_msg)
 
+        # This is pretty bad but i'll deprecate it and keep the code for now
+        """
         @self.command(pass_context=True)
         async def bot(ctx, arg: str = None, arg2: str = None, token_in: str = None, prefix_in: str = None):
+
             if not self.check_admin(ctx.message.author):
                 return
 
@@ -287,7 +276,7 @@ class DiscordBot(commands.Bot):
                                         '`{0}bot [bot name] <listservers>`\n'
                                         '`{0}bot [bot name] <renameserver> [current name] [new name]`\n'
                                         'Bot command used for bot addition, removal, and management'.format(
-                                            self.command_prefix))
+                                            self.command_prefix))"""
 
     def get_server(self, server: discord.Server = None, name: str = None, id: str = None) -> server.Server:
         test_id = None
@@ -334,7 +323,7 @@ class DiscordBot(commands.Bot):
         return False
 
     async def find_reee(self, content, message, in_server):
-        if not in_server.reee:
+        if not in_server.reee_message:
             return
 
         match = re.match(r'(reee+)\b', content, flags=re.IGNORECASE)
@@ -366,7 +355,7 @@ class DiscordBot(commands.Bot):
         if self.check_admin(user):
             return True
 
-        if type(user) is discord.Member:
+        if isinstance(user, discord.Member):
             server_perm = user.server_permissions  # type:discord.Permissions
             if server_perm.administrator:
                 return True
@@ -382,9 +371,9 @@ class DiscordBot(commands.Bot):
             if s.is_mod(user):
                 return True
 
-            if type(user) is discord.Member:
+            if isinstance(user, discord.Member):
                 for r in s.rolemods:
-                    for sr in user.roles:  # is actually member
+                    for sr in user.roles:
                         if sr.id == r:
                             return True
         return False
@@ -405,6 +394,20 @@ class DiscordBot(commands.Bot):
             await self.add_reaction(message, '🖤')
             await self.add_reaction(message, '🐝')
 
+    async def handle_manage_servers(self, message):
+        """Updates server info and adds new servers"""
+        if not self.get_server(name=message.server.name):
+            real_server = self.get_server(server=message.server)  # retrieve client copy by id
+            if real_server:
+                real_server.name = message.server.name  # handle server name changes
+                storage.write_server_data(real_server)
+            else:
+                new_server = server.Server(name=message.server.name,
+                                           id=message.server.id,
+                                           mods=[message.server.owner.id])
+                self.local_servers.append(new_server)
+                storage.write_server(new_server)
+
     def load_cogs(self, extensions):
         for ext in extensions:
             m = importlib.import_module(ext)
@@ -420,8 +423,8 @@ class DiscordBot(commands.Bot):
 
         async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
-                await self.bot.send_message(ctx.message.channel,
-                                            'Sorry, but this command is only accessible from a server')
+                await self.send_message(ctx.message.channel,
+                                        'Sorry, but this command is only accessible from a server')
                 return
 
             in_server = self.get_server(server=ctx.message.server)
@@ -443,8 +446,8 @@ class DiscordBot(commands.Bot):
 
         async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
-                await self.bot.send_message(ctx.message.channel,
-                                            'Sorry, but this command is only accessible from a server')
+                await self.send_message(ctx.message.channel,
+                                        'Sorry, but this command is only accessible from a server')
                 return
 
             in_server = self.get_server(server=ctx.message.server)
@@ -479,13 +482,6 @@ class DiscordBot(commands.Bot):
         for swap in replace_chars:
             if swap[0] in content:
                 content = content.replace(swap[0], swap[1])
-        return content
-
-    def map_commands(self, content: str) -> str:
-        if content.find(self.command_prefix) == 0:
-            command = content[len(self.command_prefix):content.find(' ')]
-            if command in command_mappings:
-                return self.command_prefix + command_mappings[command] + content[content.find(' '):]
         return content
 
     def command_lowercase(self, content: str) -> str:
