@@ -96,10 +96,10 @@ purge = form('**Purge usage**:\n'
 purge.add_tagline('purge a number of messages from member(s)')
 purge.high_perm = True
 
-reee = form("Set reee on/off: `{0}reee <true/false>`\n"
-            "Get reee state: `{0}reee`\n"
-            'Set reee response: `{0}reee <response> [response]`\n'
-            'Get reee response: `{0}reee <response>`')
+reee = form("Turn reee response on/off: `{0}reee <true/false>`\n"
+            "Get reee response state: `{0}reee`\n"
+            'Set reee message: `{0}reee <message> [message]`\n'
+            'Get reee message: `{0}reee <message>`')
 
 reee.add_tagline('manage bot\'s `reee` response')
 reee.high_perm = True
