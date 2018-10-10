@@ -9,3 +9,7 @@ class StorageError(Exception):
 
 class APIError(Exception):
     pass
+
+
+class HTTPBadRequest(Exception):
+    pass
