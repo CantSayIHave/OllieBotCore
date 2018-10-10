@@ -1,14 +1,13 @@
 import asyncio
 
-import storage_manager as storage
+import storage_manager_v2 as storage
 from cogs import feeds
-from discordbot import DiscordBot
 from server import Server
 from util import global_util
 from util.global_util import *
 import util.scheduler as scheduler
 
-random.seed()
+import config
 
 """
 DONE:
@@ -65,64 +64,28 @@ command control (maybe) (kinda did)
 
 """
 
+random.seed()
+
 async_exit_timer = 0
-
-sync_exit_timer = 0
-
-sync_shutdown = False
 
 startup_extensions = ["server_utils", "feeds", "fun", "responses", "music", "think", "sense", "help", "photoshop", "admin"]
 
 startup_extensions = ['cogs.{}'.format(x) for x in startup_extensions]
 
-replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]
 
-command_mappings = {'b-ify': 'b_ify',
-                    'nick-all': 'nick_all',
-                    '8ball': 'eight_ball',
-                    'eightball': 'eight_ball'}
+storage.initialize(config.BOT_NAME)
+bot = storage.load_bot()
+print('Loaded bot {}'.format(bot.name))
 
-
-class BotManager:
-    def __init__(self):
-        self.bots = []
-
-    def add(self, bot: DiscordBot):
-        bot.bot_list = self  # every bot can access the bot list
-        self.bots.append(bot)
-
-    def remove(self, bot: DiscordBot):
-        self.bots.remove(bot)
-
-    def run_all(self, loop):
-        for b in self.bots:  # type:DiscordBot
-            loop.create_task(b.start(b.token))
-
-    def __len__(self):
-        return len(self.bots)
-
-    def __iter__(self):
-        return self.bots.__iter__()
-
-    def __getitem__(self, item):
-        if type(item) is str:
-            for b in self.bots:
-                if b.name == item:
-                    return b
-        else:
-            return self.bots[item]
-        raise KeyError('Bot with name `{}` not found.'.format(item))
-
-    def __str__(self):
-        return 'BotManager:{}'.format(self.bots)
-
-    def __repr__(self):
-        return str(self)
+global_util.hug_library = storage.load_hugs()
+global_util.pat_library = storage.load_pats()
 
 
-async def delete_messages():
+async def handle_queues():
     while True:
         await asyncio.sleep(1)
+
+        # |-----------[ Message Delete Queue ]-----------|
         for d in global_util.delete_queue:  # type: DeleteMessage
             d.timer -= 1
             if d.timer <= 0:
@@ -132,6 +95,7 @@ async def delete_messages():
                     print('Failed to delete a message.')
                 global_util.delete_queue.remove(d)
 
+        # |-----------[ Scheduled Coroutine Executor ]-----------|
         for c in global_util.coro_queue:  # type: TimedFuture
             c.timer -= 1
             if c.timer <= 0:
@@ -141,96 +105,80 @@ async def delete_messages():
                     print('Coro out failed at: {}'.format(e))
                 global_util.coro_queue.remove(c)
 
+        # |-----------[ Threadsafe Proxy Message Sending ]-----------|
+        while len(global_util.out_messages) > 0:
+            try:
+                msg_out = global_util.out_messages.popleft()  # type: ProxyMessage
+                if msg_out.embed is None:
+                    await msg_out.bot.send_message(msg_out.channel, msg_out.content)
+                else:
+                    await msg_out.bot.send_message(msg_out.channel, em=msg_out.embed)
+            except Exception as e:
+                print('Proxy sender failed at {}'.format(e))
+
 
 async def background_async():
-    global bots, loop
+    global loop
     while True:
         await asyncio.sleep(10)
+
         try:
-            while len(global_util.out_messages) > 0:
-                try:
-                    msg_out = global_util.out_messages.popleft()  # type: ProxyMessage
-                    if msg_out.embed is None:
-                        await msg_out.bot.send_message(msg_out.channel, msg_out.content)
-                    else:
-                        await msg_out.bot.send_message(msg_out.channel, em=msg_out.embed)
-                except Exception as e:
-                    print('Proxy sender failed at {}'.format(e))
+            # |-----------[ Decrement Spam Timers ]-----------|
+            for server in bot.local_servers:  # type: Server
+                for c in server.spam_timers:
+                    if server.spam_timers[c] > 0:
+                        server.spam_timers[c] -= 10
 
-            for b in bots:
-                for s in b.local_servers:  # type: Server
-                    for c in s.spam_timers:
-                        if s.spam_timers[c] > 0:
-                            s.spam_timers[c] -= 10
+                server.response_lib.dec_spam_timers(10)
 
-                    s.response_lib.dec_spam_timers(10)
-
-                    """
-                    try:
-                        await music.music_autoplay(s, b.bot)
-                    except Exception as e:
-                        print('Music autoplay failed at: ' + str(e))"""
-
-            print('Alive ' + str(global_util.alive_timer))
+            # |-----------[ Console Updates ]-----------|
+            print('Alive {}'.format(global_util.alive_timer))
 
             global_util.alive_timer += 1
             if global_util.alive_timer > 6:
                 global_util.alive_timer = 0
 
+            # |-----------[ Update Rss Feeds ]-----------|
             global_util.rss_timer += 10
 
             if global_util.rss_timer >= TIME_RSS_LOOP:
                 global_util.rss_timer = 0
                 print('rss event')
-                for b in bots:  # type: DiscordBot
-                    for s in b.local_servers:  # type: Server
-                        for r in s.rss:  # type: Feed
-                            if r.type == 'twitter':
-                                try:
-                                    await b.loop.run_in_executor(def_executor, lambda: feeds.scrape_twitter(b, s, r))
-                                except Exception as e:
-                                    print('Twitter scrape failed with error: {}'.format(e))
 
-                            elif r.type == 'twitch':
-                                try:
-                                    await feeds.scrape_twitch(b, s, r)
-                                except Exception as e:
-                                    print('Twitch scrape failed with error: {}'.format(e))
+                for server in bot.local_servers:  # type: Server
+                    if server.feeds:
+                        updated_feeds = await olliebot_api.update_feeds(server.feeds)
 
-                            elif r.type == 'youtube':
-                                try:
-                                    await feeds.scrape_youtube(b, s, r)
-                                except Exception as e:
-                                    print('Youtube scrape failed with error: {}'.format(e))
+                        # push feed updates
+                        for u_feed in updated_feeds:
+                            await feeds.send_update(bot, server, u_feed)
 
+                        new_feeds = [x for x in server.feeds if x.first_time is True]
+
+                        # push new feeds
+                        for n_feed in new_feeds:
+                            await feeds.send_first_update(bot, server, n_feed)
+
+                        storage.write_feeds(server)
+
+            # |-----------[ Last Resort Restart ]-----------|
             global_util.exit_timer += 10
-            if global_util.exit_timer >= global_util.TIME_RESPONSE_EXIT and not global_util.save_in_progress:  # kill at 5 min
+            if global_util.exit_timer >= global_util.TIME_RESPONSE_EXIT and not storage.save_in_progress:  # kill at 5 min
                 exit(1)
 
-            if global_util.internal_shutdown and (not global_util.save_in_progress):
+            # |-----------[ Graceful Shutdown ]-----------|
+            if global_util.internal_shutdown and (not storage.save_in_progress):
                 print('async shutting down...')
                 flush_delete_queue()
                 asyncio.sleep(2)
-                for b in bots:
-                    await b.logout()
+                await bot.logout()
                 break
 
         except Exception as e:
             print('Async task loop error: {}'.format(e))
 
 
-bots = BotManager()
-
-# load bots by name into bot manager
-with open('globals/bots.json', 'r') as f:
-    bot_names = json.load(f)['bots']
-    for name in bot_names:
-        bots.add(storage.load_bot(name))
-    f.close()
-
-# load """cogs""" by startup extensions
-for b in bots:  # type: DiscordBot
-    b.load_cogs(startup_extensions)
+bot.load_cogs(startup_extensions)
 
 
 # Full bot loop
@@ -238,21 +186,20 @@ for b in bots:  # type: DiscordBot
 
 loop = asyncio.get_event_loop()
 
-bots.run_all(loop)
+loop.create_task(bot.start(bot.token))
 
 loop.create_task(twitch.initialize())  # async library requires init
-loop.create_task(delete_messages())
+loop.create_task(handle_queues())
 loop.create_task(scheduler.task_loop())  # datetime callback scheduling
 
 try:
     loop.run_until_complete(background_async())
-except Exception:
-    for b in bots:  # type: DiscordBot
-        loop.run_until_complete(b.logout())
+except:
+    loop.run_until_complete(bot.logout())
 finally:
     try:
         loop.close()
-    except Exception:
+    except:
         exit(5)
 
 if global_util.internal_shutdown:
