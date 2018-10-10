@@ -1,0 +1,1 @@
+from .insultgen import *
