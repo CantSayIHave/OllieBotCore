@@ -14,29 +14,6 @@ class BlockItem:
         return "BlockItem:[n={}, ch={}]".format(self.name, self.channel)
 
 
-class Feed:
-    def __init__(self, **kwargs):
-        self.uid = kwargs.get('uid', '')
-        self.channel_id = kwargs.get('channel_id', '')
-        self.last_id = kwargs.get('last_id', '')
-        self.last_time = kwargs.get('last_time', '')
-        self.type = kwargs.get('type', '')
-        self.title = kwargs.get('title', '')
-        self.user = kwargs.get('user', '')
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __str__(self):
-        return "Feed:[uid={}, chid={}, lid={}, lt={}, tp={}, ti={}, u={}]".format(self.uid,
-                                                                                  self.channel_id,
-                                                                                  self.last_id,
-                                                                                  self.last_time,
-                                                                                  self.type,
-                                                                                  self.title,
-                                                                                  self.user)
-
-
 class MutedMember:
     def __init__(self, **kwargs):
         self.member = kwargs.get('member', None)
