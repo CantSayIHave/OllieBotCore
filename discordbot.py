@@ -218,66 +218,6 @@ class DiscordBot(commands.Bot):
 
             await self.send_message(discord.Object(id=in_server.leave_channel), out_msg)
 
-        # This is pretty bad but i'll deprecate it and keep the code for now
-        """
-        @self.command(pass_context=True)
-        async def bot(ctx, arg: str = None, arg2: str = None, token_in: str = None, prefix_in: str = None):
-
-            if not self.check_admin(ctx.message.author):
-                return
-
-            global bots
-            if arg == 'list':
-                await self.say('Current bot list:')
-                for b in bots:
-                    await self.say(b.name)
-
-            elif arg == 'new':
-                for b in bots:
-                    if b.name == arg2:
-                        await self.say('Sorry, bot name taken.')  # Search for bot name before adding
-                        return
-
-                if arg2 and token_in:
-                    if prefix_in:
-                        newbot = DiscordBot(name=arg2, token=token_in, prefix=prefix_in)
-                    else:
-                        newbot = DiscordBot(name=arg2, token=token_in)
-                    bots.append(newbot)
-                    storage.write_bot(newbot.bot)
-                    newbot.run()
-                    await self.say('Bot ' + newbot.name + ' added!')
-
-            elif arg and arg2:
-                for b in bots:
-                    if b.name == arg:
-                        if arg2 == 'listservers':
-                            await self.say('Current server list for ' + b.name + ':')
-                            for s in b.servers:
-                                await self.say('`' + s.name + '`')
-                        elif arg2 == 'renameserver':
-                            if token_in and prefix_in:
-                                old_name = token_in
-                                new_name = prefix_in
-                                for s in b.servers:
-                                    if s.name == old_name:
-                                        s.name = new_name
-                                        await self.say(b.name + ' server ' + old_name + ' changed to ' + new_name)
-                                        storage.write_bot(b.bot)
-                                        return
-                            else:
-                                await self.say('Please provide current and new server names as arguments')
-
-            if arg == 'help':
-                await self.send_message(ctx.message.author,
-                                        '**Bot usage**:\n'
-                                        '`{0}bot <list>`\n'
-                                        '`{0}bot <new> [name] [token] [prefix]`\n'
-                                        '`{0}bot [bot name] <listservers>`\n'
-                                        '`{0}bot [bot name] <renameserver> [current name] [new name]`\n'
-                                        'Bot command used for bot addition, removal, and management'.format(
-                                            self.command_prefix))"""
-
     def get_server(self, server: discord.Server = None, name: str = None, id: str = None) -> server.Server:
         test_id = None
         if server:
