@@ -17,17 +17,31 @@ class Admin:
             if not self.bot.check_admin(ctx.message.author):
                 return
 
+            session_log = ''
+
             def prints(anything):
                 self.print_log += str(anything) + '\n'
 
-            def gen(obj):
-                stuff = yield from obj
-                return stuff
-
             await self.bot.say('Entering REPL for {}.'.format(ctx.message.author.name))
+            base_message = await self.bot.say('```python\n\n```')
+
+            async def push_line(text):
+                """
+                Rather than pushing a newline, this just prints.
+                This way a >>> may be filled in.
+                """
+                nonlocal base_message, session_log
+                session_log += text
+                if len(session_log) > 500:
+                    # New message created here, so session log is cleared too
+                    session_log = ''
+                    base_message = self.bot.send_message(base_message.channel, '```python\n{}\n```'.format(text))
+                else:
+                    await self.bot.edit_message(base_message, '```python\n{}\n```'.format(session_log))
+
             while True:
                 self.print_log = ""
-                await self.bot.say('>>> ')
+                await push_line('>>> ')
                 try:
                     response = await self.bot.wait_for_message(author=ctx.message.author, timeout=10.0 * 60.0)
                 except asyncio.TimeoutError:
@@ -35,6 +49,14 @@ class Admin:
                     break
 
                 line = self.extract_code(response.content)
+
+                await push_line(line + '\n')
+
+                # attempt to delete input line
+                try:
+                    await self.bot.delete_message(response)
+                except:
+                    pass
 
                 if 'prints' not in line:
                     line = line.replace('print', 'prints')
@@ -52,17 +74,19 @@ class Admin:
 
                 try:
                     ret_print = eval(line)
-                    if ret_print:
+                    if ret_print is not None:
                         prints(ret_print)
                 except Exception:
                     try:
                         ret_print = exec(line)
-                        if ret_print:
+                        if ret_print is not None:
                             prints(ret_print)
                     except Exception as e:
                         prints(e)
                 if self.print_log:
-                    await self.bot.say('```\n{}\n```'.format(self.print_log))
+                    await push_line(self.print_log)
+                else:
+                    await push_line('\n')
 
         @self.bot.command(pass_context=True)
         async def send(ctx, channel_id: str, *, msg_out: str):
