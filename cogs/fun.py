@@ -1531,10 +1531,12 @@ class Fun:
             texty_wexty = texty_wexty.replace("r", "w")
             texty_wexty = re.sub(r'(?<!lo)l(?!ol)', 'w', texty_wexty)
             texty_wexty = texty_wexty.replace("lol", "lowl")
-            texty_wexty = re.sub(r'(?<!w)u(?!w)', 'uwu', texty_wexty)
-            texty_wexty = re.sub(r'(?<!w)o(?!w)', 'owo', texty_wexty)
+            texty_wexty = re.sub(r'(?<!w[ow])u(?!w)', 'uwu', texty_wexty)
+            texty_wexty = re.sub(r'(?<!w)o(?![wou])', 'owo', texty_wexty)
+            texty_wexty = texty_wexty.replace("ou", "ouw")
+            texty_wexty = texty_wexty.replace("oo", "oow")
             texty_wexty = texty_wexty.replace("you", "u")
-            texty_wexty = texty_wexty.replace("uck", "ucky wucky")
+            texty_wexty = re.sub(r'(?<!w)uck', 'ucky wucky', texty_wexty)
 
             await self.bot.say(texty_wexty)
 
