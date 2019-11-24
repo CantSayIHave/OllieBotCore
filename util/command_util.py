@@ -185,3 +185,18 @@ async def extract_image(ctx: commands.Context, arg: str = None, member: str = No
             base_image = await global_util.get_image(ctx.message.embeds[0]['url'])
 
     return base_image
+
+
+def run_converter(converter_class, ctx, arg, default=None):
+    converter = converter_class(ctx, arg)
+    try:
+        return converter.convert()
+    except:
+        return default
+
+
+def extract_passed(ctx, bot):
+    try:
+        return ctx.message.content.replace('{}{} '.format(bot.command_prefix, ctx.command.name), '')
+    except:
+        return ''

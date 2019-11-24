@@ -29,6 +29,12 @@ fix all self references
 
 replace_chars = [('“', '"'), ('”', '"'), ('‘', "'"), ('’', "'")]  # need to put this in utils
 
+# things for eggy
+banner_channel = '607765058692448276'
+icon_channel = '607765350167216134'
+emote_channel = '607765472439697418'
+vote_channel_switch = datetime.strptime('2019-8-19 00:00:00', '%Y-%m-%d %H:%M:%S').replace(tzinfo=None)
+
 
 class DiscordBot(commands.Bot):
     def __init__(self, formatter=None, pm_help=False, **options):
@@ -80,6 +86,21 @@ class DiscordBot(commands.Bot):
                 if message.attachments or message.embeds:
                     await self.add_reaction(message, '👍')
                     await self.add_reaction(message, '👎')
+
+            if message.channel.id == emote_channel:
+                if message.attachments or message.embeds:
+                    await self.add_reaction(message, '👍🏿')
+                    await self.add_reaction(message, '👎🏿')
+
+            if message.channel.id == banner_channel:
+                if message.attachments or message.embeds:
+                    await self.add_reaction(message, '⬆')
+                    await self.add_reaction(message, '⬇')
+
+            if message.channel.id == icon_channel:
+                if message.attachments or message.embeds:
+                    await self.add_reaction(message, '⬆')
+                    await self.add_reaction(message, '⬇')
 
             # cant have a command without content ¯\_(ツ)_/¯
             if not message.content:
@@ -142,6 +163,12 @@ class DiscordBot(commands.Bot):
             message.content = self.char_swaps(message.content)  # swap common chars like unicode quotes
 
             content_lower = message.content.lower()  # type: str
+
+            # if message.server.id == '447183016998076418':
+            #     if not high_perm:
+            #         if any([x in content_lower for x in ['creeper', 'aww man', 'aw man', 'kreeper', 'creper', ]]):
+            #             await asyncio.sleep(0.2)
+            #             await self.delete_message(message)
 
             # |------------[ Command Interceptions / Alt Systems ]------------|
             if await help.intercept_help(message, self):  # intercept help
@@ -214,9 +241,130 @@ class DiscordBot(commands.Bot):
 
             print('Leave event on {}'.format(in_server.name))
 
-            out_msg = '**{}** has left the server. Goodbye! <:pinguwave:415782912278003713>'.format(member.name)
+            if in_server.id == '313841769441787907':
+                out_msg = '**{}** has left the server.'.format(member.name)
 
-            await self.send_message(discord.Object(id=in_server.leave_channel), out_msg)
+                em = discord.Embed(title=global_util.CHAR_ZWS, description=out_msg, color=random.randint(0, 0xffffff))
+                em.set_image(url='https://cdn.discordapp.com/attachments/338528501005287426/593219534765293572/156150448871837104.png')
+                await self.send_message(discord.Object(id=in_server.leave_channel), embed=em)
+            else:
+                out_msg = '**{}** has left the server. Goodbye! <:pinguwave:415782912278003713>'.format(member.name)
+
+                await self.send_message(discord.Object(id=in_server.leave_channel), out_msg)
+
+        @self.event
+        async def on_message_delete(message):
+            if message.author.id == self.user.id:
+                return
+
+            server = self.get_server(message.server)
+
+            if not server.message_changes:
+                return
+
+            if self.has_high_permissions(message.author, server=server):
+                if message.content:
+                    if not message.content.startswith('-i'):
+                        return
+                    # else continue
+                else:
+                    return
+
+            # cover pictures
+            if not message.content:
+                alt_content = None
+
+                if message.embeds:
+                    try:
+                        alt_content = message.embeds[0]['url']
+                    except:
+                        pass
+                elif message.attachments:
+                    try:
+                        alt_content = message.attachments[0]['url']
+                    except:
+                        pass
+
+                if not alt_content:
+                    em = discord.Embed(title='Deleted Message',
+                                       color=0xff5000,
+                                       description='**No content detected**')
+                else:
+                    em = discord.Embed(title='Deleted Message',
+                                       color=0xff5000,
+                                       description=global_util.CHAR_ZWS)
+                    em.set_image(url=alt_content)
+
+            else:
+                em = discord.Embed(title='Deleted Message',
+                                   color=0xff5000,
+                                   description=message.content[:2000])
+
+            em.set_author(name=message.author.name, icon_url=message.author.avatar_url)
+            em.set_footer(text='Channel: {}'.format(message.channel.name))
+
+            await self.send_message(discord.Object(id=server.message_changes), embed=em)
+
+        @self.event
+        async def on_message_edit(before, after):
+            if before.author.id == self.user.id or after.author.id == self.user.id:
+                return
+            
+            server = self.get_server(before.server)
+
+            if not server.message_changes:
+                return
+
+            if self.has_high_permissions(before.author, server=server):
+                if before.content:
+                    if not before.content.startswith('-i'):
+                        return
+                    # else continue
+                else:
+                    return
+
+            if before.content == after.content:
+                return
+
+            message_url = 'https://discordapp.com/channels/{}/{}/{}'.format(after.server.id,
+                                                                            after.channel.id,
+                                                                            after.id)
+
+            # cover pictures
+            if not before.content:
+                alt_content = None
+
+                if before.embeds:
+                    try:
+                        alt_content = before.embeds[0]['url']
+                    except:
+                        pass
+                elif before.attachments:
+                    try:
+                        alt_content = before.attachments[0]['url']
+                    except:
+                        pass
+
+                if not alt_content:
+                    em = discord.Embed(title='Edited Message',
+                                       color=0xffd000,
+                                       description='[Link to new]({})\n\nOriginal: **No content detected**'
+                                                   ''.format(message_url))
+                else:
+                    em = discord.Embed(title='Edited Message',
+                                       color=0xffd000,
+                                       description='[Link to new]({})'.format(message_url))
+                    em.set_image(url=alt_content)
+            else:
+                em = discord.Embed(title='Edited Message',
+                                   color=0xffd000,
+                                   description='[Link to new]({})\n\nOriginal:\n{}'.format(message_url,
+                                                                                           before.content[:2000]))
+
+            em.set_author(name=before.author.name, icon_url=before.author.avatar_url)
+            em.set_footer(text='Channel: {}'.format(before.channel.name))
+
+            await self.send_message(discord.Object(id=server.message_changes), embed=em)
 
     def get_server(self, server: discord.Server = None, name: str = None, id: str = None) -> server.Server:
         test_id = None
@@ -363,12 +511,14 @@ class DiscordBot(commands.Bot):
 
         async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
-                await self.send_message(ctx.message.channel,
+                await self.send_message(ctx.message.author,
                                         'Sorry, but this command is only accessible from a server')
                 return
 
             in_server = self.get_server(server=ctx.message.server)
             if not self.has_high_permissions(ctx.message.author, in_server):
+                await self.send_message(ctx.message.channel,
+                                        'Sorry, but you don\'t have access to this command')
                 return
             await func(in_server, ctx, *args, **kwargs)
 
@@ -386,6 +536,29 @@ class DiscordBot(commands.Bot):
 
         async def decorator(ctx, *args, **kwargs):
             if not ctx.message.server:
+                await self.send_message(ctx.message.author,
+                                        'Sorry, but this command is only accessible from a server')
+                return
+
+            in_server = self.get_server(server=ctx.message.server)
+            await func(in_server, ctx, *args, **kwargs)
+
+        decorator.__name__ = func.__name__
+        sig = inspect.signature(func)
+        decorator.__signature__ = sig.replace(parameters=tuple(sig.parameters.values())[1:])  # from ctx onward
+        return decorator
+
+    def test_admin(self, func):
+        """Decorator for testing for server
+
+        Passes found :class:`Server` object as second arg
+
+        """
+
+        async def decorator(ctx, *args, **kwargs):
+            if not ctx.message.server:
+                if not self.check_admin(ctx.message.author):
+                    return
                 await self.send_message(ctx.message.channel,
                                         'Sorry, but this command is only accessible from a server')
                 return

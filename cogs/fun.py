@@ -1205,9 +1205,9 @@ class Fun:
                            '**{1}** gives **{0}** a hug']
 
             if member_name:
-                desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
+                desc = random.choice(duo_options).format(member_name, ctx.message.author.display_name)
             else:
-                desc = random.choice(single_options).format(ctx.message.author.name)
+                desc = random.choice(single_options).format(ctx.message.author.display_name)
 
             em = discord.Embed(title=CHAR_ZWS, description=desc, color=random.randint(0, 0xffffff))
             em.set_image(url=image)
@@ -1239,9 +1239,9 @@ class Fun:
                            '**{1}** gives **{0}** headpats']
 
             if member_name:
-                desc = random.choice(duo_options).format(member_name, ctx.message.author.name)
+                desc = random.choice(duo_options).format(member_name, ctx.message.author.display_name)
             else:
-                desc = random.choice(single_options).format(ctx.message.author.name)
+                desc = random.choice(single_options).format(ctx.message.author.display_name)
 
             em = discord.Embed(title=CHAR_ZWS, description=desc, color=random.randint(0, 0xffffff))
             em.set_image(url=image)
@@ -1511,12 +1511,12 @@ class Fun:
 
         @self.bot.command(pass_context=True)
         async def clap(ctx, *, arg: str):
-            output = ''.join([x + '👏' for x in arg.split(' ')])
+            output = '👏'.join(arg.split()) + '👏'
             await self.bot.say(output[:1999])
 
         @self.bot.command(pass_context=True, aliases=['blap'])
         async def bclap(ctx, *, arg: str):
-            output = ''.join([x + '👏🏿' for x in arg.split(' ')])
+            output = '👏🏿'.join(arg.split()) + '👏🏿'
             await self.bot.say(output[:1999])
 
     @staticmethod

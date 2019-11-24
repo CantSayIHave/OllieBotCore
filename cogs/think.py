@@ -55,6 +55,7 @@ class Think:
                                                    loop=self.bot.loop,
                                                    executor=global_util.def_executor)
 
+
             if result_name:
                 await self.bot.send_file(ctx.message.channel, result_name)
             else:
@@ -112,11 +113,11 @@ async def extract_image(ctx: commands.Context, arg: str = None, member: str = No
     base_image = None
 
     if arg:
-        converted_arg = command_util.find_arg(ctx, arg, ['emoji'])
+        converted_arg = command_util.find_arg(ctx, arg, ['emoji', 'member'])
 
-        if type(converted_arg) is discord.Emoji:
+        if isinstance(converted_arg, discord.Emoji):
             base_image = await global_util.get_image(converted_arg.url)
-        elif type(converted_arg) is str:
+        elif isinstance(converted_arg, str):
             if converted_arg.startswith('http'):
                 base_image = await global_util.get_image(converted_arg)
             elif converted_arg in ['pfp', 'avatar']:
@@ -130,11 +131,17 @@ async def extract_image(ctx: commands.Context, arg: str = None, member: str = No
 
                 base_image = await global_util.get_image(member.avatar_url)
                 base_image = style_pfp(base_image)
+        elif isinstance(converted_arg, discord.Member):
+            base_image = await global_util.get_image(converted_arg.avatar_url)
+            base_image = style_pfp(base_image)
     else:
         if ctx.message.attachments:
             base_image = await global_util.get_image(ctx.message.attachments[0]['url'])
         elif ctx.message.embeds:
             base_image = await global_util.get_image(ctx.message.embeds[0]['url'])
+        else:
+            base_image = await global_util.get_image(ctx.message.author.avatar_url)
+            base_image = style_pfp(base_image)
 
     return base_image
 

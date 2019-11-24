@@ -5,8 +5,8 @@ import random
 
 class RssFeed(metaclass=ABCMeta):
     def __init__(self, **kwargs):
-        self.id = kwargs.get('id', 0)
-        self.discord_channel_id = kwargs.get('discord_channel_id', 0)
+        self.id = kwargs.get('id', '0')
+        self.discord_channel_id = kwargs.get('discord_channel_id', '0')
 
         self.first_time = False
 
@@ -14,7 +14,7 @@ class RssFeed(metaclass=ABCMeta):
             self.id = datetime.now().strftime('%y%m%d%H%M%S') + str(random.randint(1000, 10000))
 
     def update(self, feed):
-        self.__dict__.update(feed.__dict__)
+        return
 
     def __repr__(self):
         return self.__str__()
@@ -58,6 +58,10 @@ class TwitterFeed(RssFeed):
                                                           self.last_tweet_id,
                                                           self.id)
 
+    def update(self, feed):
+        self.handle = feed.handle
+        self.last_tweet_id = feed.last_tweet_id
+
     def as_dict(self):
         attrs = super().as_dict()
         attrs.update({'type': 'twitter',
@@ -66,7 +70,7 @@ class TwitterFeed(RssFeed):
         return attrs
 
     def brief(self):
-        return {'id': self.id, 'last_feed_id': self.last_tweet_id}
+        return {'id': str(self.id), 'last_feed_id': str(self.last_tweet_id)}
 
     @property
     def name(self):
@@ -97,6 +101,13 @@ class TwitchFeed(RssFeed):
                                                                            self.user_id,
                                                                            self.id)
 
+    def update(self, feed):
+        self._channel_id = feed.channel_id
+        self.last_stream_id = feed.last_stream_id
+        self.title = feed.title
+        self.user_id = feed.user_id
+        self.last_time = feed.last_time
+
     def as_dict(self):
         attrs = super().as_dict()
         attrs.update({'type': 'twitch',
@@ -107,7 +118,7 @@ class TwitchFeed(RssFeed):
         return attrs
 
     def brief(self):
-        return {'id': self.id, 'last_feed_id': self.last_stream_id}
+        return {'id': str(self.id), 'last_feed_id': str(self.last_stream_id)}
 
     @property
     def name(self):
@@ -135,6 +146,12 @@ class YouTubeFeed(RssFeed):
                                                                     self.title,
                                                                     self.last_video_id,
                                                                     self.id)
+    
+    def update(self, feed):
+        self._channel_id = feed.channel_id
+        self.title = feed.title
+        self.last_video_id = feed.last_video_id
+        self.last_time = feed.last_time
 
     def as_dict(self):
         attrs = super().as_dict()
@@ -146,7 +163,7 @@ class YouTubeFeed(RssFeed):
         return attrs
 
     def brief(self):
-        return {'id': self.id, 'last_feed_id': self.last_video_id}
+        return {'id': str(self.id), 'last_feed_id': str(self.last_video_id)}
 
     @property
     def name(self):
@@ -162,11 +179,11 @@ class YouTubeFeed(RssFeed):
 
 def build_feed(raw: dict) -> RssFeed:
     f_type = raw['type']
-    if f_type == 'twitter':
+    if f_type in ['twitter', 'TwitterFeed']:
         return TwitterFeed(**raw)
-    elif f_type == 'twitch':
+    elif f_type in ['twitch', 'TwitchFeed']:
         return TwitchFeed(**raw)
-    elif f_type == 'youtube':
+    elif f_type in ['youtube', 'YouTubeFeed']:
         return YouTubeFeed(**raw)
     else:
         raise ValueError('Unsupported feed type.')

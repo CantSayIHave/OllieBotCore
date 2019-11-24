@@ -279,6 +279,8 @@ def load_bot() -> discordbot.DiscordBot:
         s_leave_channel = server_data.get('leave_channel', None)
         s_bind_chat = server_data.get('bind_chat', None)
         s_default_role = server_data.get('default_role', None)
+        s_selfroles = server_data.get('selfroles', None)
+        s_changes = server_data.get('message_changes', None)
 
         s_block_list = [BlockItem(**command) for command in server_data['block_list']]
 
@@ -306,7 +308,9 @@ def load_bot() -> discordbot.DiscordBot:
                                   bind_chat=s_bind_chat,
                                   leave_channel=s_leave_channel,
                                   birthdays=s_birthdays,
-                                  default_role=s_default_role))  # Server Build
+                                  default_role=s_default_role,
+                                  selfroles=s_selfroles,
+                                  message_changes=s_changes))  # Server Build
 
     admins = admin.find_one({'__docname__': 'admins'})['data']
 
@@ -522,7 +526,9 @@ def write_server_data(server: Server, s_collection: Collection = None):
                    'join_channel': server.join_channel,
                    'leave_channel': server.leave_channel,
                    'bind_chat': server.music.bind_chat,
-                   'default_role': server.default_role}
+                   'default_role': server.default_role,
+                   'selfroles': server.selfroles,
+                   'message_changes': server.message_changes}
 
     update_document(s_collection,
                     docname='server_data',

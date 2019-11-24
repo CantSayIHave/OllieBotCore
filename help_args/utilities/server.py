@@ -122,6 +122,16 @@ roles = form('`{0}roles <add/remove> [base role] [new role] [optional:"NoRole"]`
 roles.add_tagline('automates mass addition, removal and replacement of roles')
 roles.high_perm = True
 
+selfroles = form('Add/remove selfroles:\n'
+                 '`{0}selfroles <add/get> [role/list of roles]`\n'
+                 '`{0}selfroles <remove> [role/list of roles]`\n'
+                 'Add a role to selfroles:\n'
+                 '`{0}selfroles <register> [role/list of roles]`\n'
+                 '`{0}selfroles <deregister> [role/list of roles]`\n'
+                 '*Note: Lists of roles should be comma-separated*\n'
+                 '__Examples__:\n'
+                 '`{0}selfroles add Role 1, Role2, Role 3`')
+
 rss = form("`{0}rss <add/remove> <twitter/twitch/youtube> [username]`\n"
            "`{0}rss <list>`\n"
            "Example: `.rss add twitter @pewdiepie` binds PieDiePie's twitter feed to the "
@@ -172,3 +182,11 @@ userjoin = form("Get user join message: `{0}userjoin <message>`\n"
 
 userjoin.add_tagline('edit message and channel for member join announcement')
 userjoin.high_perm = True
+
+vibecheck = form("`{0}vibecheck [@mention] [optional:reason]`\n"
+                 "Check a member's vibe. This also happens to ban them...\n"
+                 "Example:\n"
+                 "`{0}vibecheck `{1} (Though you can't check the bot's vibes)")
+
+vibecheck.add_tagline("Check someone's vibes")
+vibecheck.high_perm = True

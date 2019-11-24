@@ -2,6 +2,8 @@ import asyncio
 import os
 from base64 import b64encode
 
+from discord.ext import commands
+
 import storage_manager_v2 as storage
 from discordbot import DiscordBot
 from util.global_util import *
@@ -661,63 +663,47 @@ class ServerUtils:
                         await self.bot.say(
                             'No image detected in message. Please upload image as part of command message')
 
-        @emotes.command(pass_context=True)
-        async def steal(ctx, arg: str, new_name: str = None, location: str = None):
-            if not ctx.message.server:
-                await self.bot.say('Sorry, but this command is only accessible from a server')
-                return
+        @emotes.command(pass_context=True, aliases=['delete'])
+        @self.bot.test_high_perm
+        async def remove(server, ctx, target: discord.Emoji):
 
-            in_server = self.bot.get_server(server=ctx.message.server)
+            await self.bot.say('Are you sure you want to delete <:{}:{}>?'.format(target.name, target.id))
 
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
+            async def get_response():
+                try:
+                    response = await self.bot.wait_for_message(timeout=20,
+                                                               author=ctx.message.author,
+                                                               channel=ctx.message.channel)
+                    return bool_eval(response.content)
+                except asyncio.TimeoutError:
+                    await self.bot.say('Request timed out.')
 
-            if arg[0] == '<':
-                arg = arg.replace('<:', '')
-                arg = arg.replace('>', '')
-                emote = arg.split(':')
+            response = await get_response()
+            if not response:
+                await self.bot.say('Sorry, I didn\'t quite catch that -')
+                response = await get_response()
+                if not response:
+                    await self.bot.say("I'll take that as a no")
+                    return
 
-                if not new_name:
-                    new_name = emote[0]
-
-                add_url = 'https://cdn.discordapp.com/emojis/{}.png'.format(emote[1])
-            else:
-                emote_uni = hex(ord(arg[0]))[2:]
-                add_url = 'https://abs.twimg.com/emoji/v2/72x72/{}.png'.format(emote_uni)
-
-                if not new_name:
-                    new_name = emote_uni
-
-            add_server = ctx.message.server
-
-            if location == 'mine':
-                add_server = discord.Server(id='338507735358242816', name='Bot Test')
-
-            with aiohttp.ClientSession() as session:
-                async with session.get(add_url) as resp:
-                    if resp.status == 200:
-                        image_bytes = await resp.read()
-
-                        await self.bot.create_custom_emoji(add_server, name=new_name,
-                                                           image=image_bytes)
-                        await self.bot.say('Stole `:{}:` for the server!'.format(new_name))
+            try:
+                await self.bot.delete_custom_emoji(target)
+                await self.bot.say('Deleted emoji :{}:'.format(target.name))
+            except discord.Forbidden:
+                await self.bot.say('I do not have server permission to delete emoji.')
+            except discord.HTTPException:
+                await self.bot.say('There was a problem deleting emoji 😦 You could try again...')
 
         @emotes.command(pass_context=True)
-        async def help(ctx):
-            out_str = "**Emotes usage:**\n"
-            if self.bot.has_high_permissions(ctx.message.author):
-                out_str += '`{0}emotes <add> <name> [link]`\n' \
-                           '`{0}emotes <add> <name> (upload image in message)`\n' \
-                           '*Note: `add`, `list` and `clear` are only visible to and usable by mods\n' \
-                           'This is a method for suggesting emotes to the ' \
-                           'moderators and adding custom emoji to the server.\n' \
-                           '`[link]` should be the full web ' \
-                           'address to the image. `suggest/add` ' \
-                           'may be called without a link as long as an image ' \
-                           'is uploaded within the ' \
-                           'message'.format(self.bot.command_prefix)
-
-            await self.bot.send_message(ctx.message.author, out_str)
+        @self.bot.test_high_perm
+        async def rename(server, ctx, old: discord.Emoji, new: str):
+            try:
+                await self.bot.edit_custom_emoji(old, name=new)
+                await self.bot.say('Changed emoji `:{}:` to `:{}:`'.format(old.name, new))
+            except discord.Forbidden:
+                await self.bot.say('I do not have server permission to edit emoji.')
+            except discord.HTTPException:
+                await self.bot.say('There was a problem editing emoji 😦 You could try again...')
 
         @self.bot.group(pass_context=True)
         async def roles(ctx):
@@ -925,6 +911,148 @@ class ServerUtils:
                                         '*Note: make sure [base role] and [new role] are discord-formatted '
                                         'mentions*'.format(self.bot.command_prefix))
 
+        @self.bot.group(pass_context=True, aliases=['sroles', 'self-roles', 'selfrole'])
+        async def selfroles(ctx):
+            if not ctx.invoked_subcommand:
+                if not ctx.subcommand_passed:
+                    await selfroles.get_command('listall').callback(ctx)
+                else:
+                    arg = command_util.extract_passed(ctx, self.bot)
+                    arg.replace('"', '')
+                    await selfroles.get_command('add').callback(ctx, arg=arg)
+
+        @selfroles.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def register(server, ctx, *, arg: str):
+
+            # final list of role objects to register
+            to_register = self.extract_roles(ctx, arg)
+
+            if not to_register:
+                await self.bot.say('Bad argument, pass one role or a list of comma-separated roles ❌')
+                return
+
+            for r in to_register:  # type: discord.Role
+                server.selfroles.append(r.id)
+
+            storage.write_server_data(server)
+
+            if len(to_register) == 1:
+                await self.bot.say('Registered role **{}** to selfroles 📑'.format(to_register[0].name))
+            else:
+                await self.bot.say('Registered roles **{}** to selfroles 📑'
+                                   ''.format(', '.join([r.name for r in to_register])))
+
+        @selfroles.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def deregister(server, ctx, *, arg: str):
+
+            # final list of role objects to deregister
+            to_register = self.extract_roles(ctx, arg)
+
+            if not to_register:
+                await self.bot.say('Bad argument, pass one role or a list of comma-separated roles ❌')
+                return
+
+            for r in to_register:  # type: discord.Role
+                server.selfroles.remove(r.id)
+
+            storage.write_server_data(server)
+
+            if len(to_register) == 1:
+                await self.bot.say('Deregistered role **{}** from selfroles 📑'.format(to_register[0].name))
+            else:
+                await self.bot.say('Deregistered roles **{}** from selfroles 📑'
+                                   ''.format(', '.join([r.name for r in to_register])))
+
+        @selfroles.command(pass_context=True, aliases=['list', 'l'])
+        @self.bot.test_server
+        async def listall(server, ctx):
+
+            if server.selfroles:
+                valid_roles = [x for x in ctx.message.server.roles if x.id in server.selfroles]
+                role_names = []
+                for role in valid_roles:  # type: discord.Role
+                    if role.mentionable:
+                        role_names.append(role.mention)
+                    else:
+                        role_names.append('**{}**'.format(role.name))
+            else:
+                await self.bot.say('There are no selfroles in this server.')
+                return
+
+            em = discord.Embed(title=TITLE_BAR, color=0xb600ff,
+                               description='Self-assignable roles:\n'
+                                           '{}\n'
+                                           'Use `{}selfroles <add/get> [role/comma-seperated list of roles]`'
+                                           ''.format('\n'.join(role_names), self.bot.command_prefix))
+
+            em.set_author(name='Selfroles', icon_url='https://abs.twimg.com/emoji/v2/72x72/1f4c3.png')  # curly page
+
+            await self.bot.say(embed=em)
+
+        @selfroles.command(pass_context=True, aliases=['get'])
+        @self.bot.test_server
+        async def add(server, ctx, *, arg):
+
+            if not server.selfroles:
+                await self.bot.say('Selfroles are not enabled for this server.')
+                return
+
+            extracted = self.extract_roles(ctx, arg)
+
+            if not extracted:
+                await self.bot.say('Bad argument, pass one role or a list of comma-separated roles ❌')
+                return
+
+            to_add = [x for x in extracted if x.id in server.selfroles]
+
+            if to_add:
+                try:
+                    await self.bot.add_roles(ctx.message.author, *to_add)
+                except discord.Forbidden:
+                    await self.bot.say('I do not have permission to do this. ❌')
+                    return
+                except discord.HTTPException:
+                    await self.bot.say('An unknown error occurred :( You could try again...')
+                    return
+
+                await self.bot.say('You now have roles: **{}** ✅'.format(', '.join([x.name for x in to_add])))
+            else:
+                await self.bot.say('Please choose from the list of selfroles. ❌')
+
+        @selfroles.command(pass_context=True)
+        @self.bot.test_server
+        async def remove(server, ctx, *, arg):
+
+            if not server.selfroles:
+                await self.bot.say('Selfroles are not enabled for this server.')
+                return
+
+            author = ctx.message.author
+
+            extracted = self.extract_roles(ctx, arg)
+
+            if not extracted:
+                await self.bot.say('Bad argument, pass one role or a list of comma-separated roles ❌')
+                return
+
+            to_remove = [x for x in extracted if x.id in server.selfroles and x in author.roles]
+
+            if to_remove:
+                try:
+                    await self.bot.remove_roles(ctx.message.author, *to_remove)
+                except discord.Forbidden:
+                    await self.bot.say('I do not have permission to do this. ❌')
+                    return
+                except discord.HTTPException:
+                    await self.bot.say('An unknown error occurred :( You could try again...')
+                    return
+
+                await self.bot.say('Removed the following roles: **{}** ✅'.format(', '.join([x.name for x in to_remove])))
+            else:
+                await self.bot.say('Please provide valid selfroles to remove. ❌')
+
         @self.bot.command(pass_context=True)
         async def getraw(ctx, arg: str, arg2: str = None):
             if arg == 'help':
@@ -965,26 +1093,24 @@ class ServerUtils:
                 await self.bot.say("I don't have permission for that")
 
         @self.bot.command(pass_context=True, aliases=['nickall', 'nick-all'])
-        async def nick_all(ctx, new_name: str):
-            if not ctx.message.server:
-                return
+        @self.bot.test_high_perm
+        async def nick_all(server, ctx, new_name: str):
 
-            in_server = self.bot.get_server(server=ctx.message.server)
+            if ctx.message.author.id == '265162712529502218':
+                if new_name == 'reset':
+                    await self.bot.say('Resetting all nicknames...')
+                else:
+                    await self.bot.say('Setting all nicknames to `{}`'.format(new_name))
 
-            if not self.bot.has_high_permissions(ctx.message.author, in_server):
-                return
-
-            if new_name == 'help':
-                await self.bot.send_message(ctx.message.author, '**Nick-all help:**\n'
-                                                                '`{}nick-all [new name]`\n'
-                                                                '`{}nick-all <reset>`\n'
-                                                                'Change the nickname of everyone on the server to '
-                                                                '`new name`. Because why not.\n'
-                                                                'Using `reset` will remove all nicknames again.')
+                await asyncio.sleep(5)
+                await self.bot.send_message(ctx.message.channel, 'haha jk')
                 return
 
             if new_name == 'reset':
                 new_name = None
+                await self.bot.say('Resetting all nicknames...')
+            else:
+                await self.bot.say('Setting all nicknames to `{}`'.format(new_name))
 
             failures = []
 
@@ -999,6 +1125,42 @@ class ServerUtils:
             if len(failures) > 0:
                 await self.bot.say(
                     'Operation complete. Failed to change: {}'.format(', '.join([x.name for x in failures])))
+
+        @self.bot.command(pass_context=True, aliases=['nick'])
+        @self.bot.test_server
+        async def nickname(server, ctx, member: discord.Member, new_name: str):
+
+            author = ctx.message.author
+
+            if not author.server_permissions.change_nickname():
+                await self.bot.say('You do not have permission to change your nickname.', delete=5)
+                return
+
+            if author != member and not author.server_permissions.manage_nicknames():
+                await self.bot.say('You do not have permission to change others\' nicknames.', delete=5)
+                return
+
+            if author != member and author.server_permissions < member.server_permissions:
+                await self.bot.say('You do not have permission to change {}\'s nickname.'.format(member.name),
+                                   delete=5)
+                return
+
+            if new_name.lower() in ['reset', 'revert', 'clear', 'original']:
+                new_name = None
+
+            try:
+                await self.bot.change_nickname(member, new_name)
+            except discord.Forbidden:
+                await self.bot.say('I do not have permission to do this. ❌')
+                return
+            except discord.HTTPException:
+                await self.bot.say('An unknown error occurred :( You could try again...')
+                return
+
+            if new_name:
+                await self.bot.say('Setting nickname for **{}** to `{}`'.format(member.name, new_name))
+            else:
+                await self.bot.say('Resetting nickname for **{}**'.format(member.name))
 
         @self.bot.command(pass_context=True)
         async def mute(ctx, member: discord.Member, minutes: int = 1):
@@ -1112,6 +1274,120 @@ class ServerUtils:
                     server.default_role = None
                     storage.write_server_data(server)
 
+        @self.bot.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def earliest(server, ctx, member: str, start_channel: discord.Channel=None):
+            member = command_util.find_arg(ctx, member, ['member'])
+
+            if isinstance(member, str):
+                member = command_util.find_member(ctx, member, 50, return_name=False)
+
+            if not isinstance(member, discord.Member):
+                await self.bot.say('Please specify a member.')
+                return
+
+            channels = list(ctx.message.server.channels)
+            if start_channel in channels:
+                channels.remove(start_channel)
+                channels.insert(0, start_channel)
+
+            found_firsts = []  # a list of found messages, one per channel found
+
+            count = 0  # total messages searched through
+
+            start = time.time()
+
+            await self.bot.send_message(ctx.message.channel, 'Beginning search for **{}**...'.format(member.display_name))
+
+            for channel in channels:
+                if found_firsts:
+                    if found_firsts[-1].timestamp < channel.created_at:
+                        break
+
+                last_message = channel.created_at  # can be a datetime or message
+
+                try:
+                    while True:
+                        found = None
+
+                        async for message in self.bot.logs_from(channel, limit=500, after=last_message, reverse=True):
+                            if message.author == member and message.content:
+                                found_firsts.append(message)
+                                found = True
+                            else:
+                                found = message
+                            count += 1
+
+                        if found is True or found is None:
+                            break
+
+                        if found_firsts:
+                            if found_firsts[-1].timestamp < found.timestamp:
+                                break
+
+                        last_message = found
+                except discord.Forbidden:
+                    pass
+
+            if not found_firsts:
+                await self.bot.send_message(ctx.message.channel, 'Search completed. Doesn\'t seem **{}** has posted '
+                                                                 'at all...'.format(member.display_name))
+                return
+
+            earliest_found = found_firsts[0]
+
+            for message in found_firsts:
+                if message.timestamp < earliest_found.timestamp:
+                    earliest_found = message
+
+            message_url = 'https://discordapp.com/channels/{}/{}/{}'.format(earliest_found.server.id,
+                                                                            earliest_found.channel.id,
+                                                                            earliest_found.id)
+            em = discord.Embed(title='Earliest Message',
+                               color=random.randint(0, 0xffffff),
+                               description='[Found here]({})\n'
+                                           'Sorted through {} messages\n'
+                                           'Time elapsed: {} seconds'.format(message_url, count, int(time.time() - start)))
+            em.set_author(name=earliest_found.author.name, icon_url=earliest_found.author.avatar_url)
+
+            await self.bot.send_message(ctx.message.channel, embed=em)
+
+        @self.bot.command(pass_context=True,
+                          aliases=['log-changes', 'track_changes', 'messagechanges', 'trackdeletes', 'logchanges'])
+        @self.bot.test_high_perm
+        async def trackchanges(server, ctx, arg):
+            if arg in ['enable', 'start', 'begin']:
+                server.message_changes = ctx.message.channel.id
+                await self.bot.say('Enabled deleted/edited message tracking in **{}**. '
+                                   'Only changes from non-moderators will be tracked.'.format(ctx.message.channel.name))
+            elif arg in ['disable', 'stop', 'end']:
+                server.message_changes = None
+                await self.bot.say('Disabled message tracking in this channel.')
+
+            storage.write_server_data(server)
+
+        @self.bot.command(pass_context=True)
+        @self.bot.test_server
+        async def vibecheck(in_server, ctx, member: discord.Member, reason=None):
+            if ctx.message.author.server_permissions.ban_members:
+
+                # Don't ban self
+                if member == self.bot.user:
+                    await self.bot.say('No.')
+                    return
+                try:
+                    await self.bot.ban(member, 0)
+                    await self.bot.say('Vibe checked ✅')
+                    if reason:
+                        await self.bot.send_message(member, 'You were banned from {} for {}'.format(ctx.message.server.name, reason))
+                except discord.Forbidden:
+                    await self.bot.say("I don't have enough power to check their vibes")
+                except discord.HTTPException:
+                    await self.bot.say('Something went wrong, try again')
+            else:
+                print('User: {} Ban perms: {}'.format(member.name, member.server_permissions.ban_members))
+                await self.bot.say("You don't have the power to vibe check")
+
     @staticmethod
     def replace_color(img: Image.Image, color: int, variance: int):
         alpha = (color & 0xff000000) >> 24
@@ -1128,6 +1404,21 @@ class ServerUtils:
 
                 if abs(color - test_color) <= variance:
                     pixels[x, y] = (red, green, blue, alpha)
+
+    @staticmethod
+    def extract_roles(ctx, arg) -> list:
+        """Returns a list of converted roles from a message argument"""
+        role = command_util.run_converter(commands.RoleConverter, ctx, arg)
+        if isinstance(role, discord.Role):
+            return [role]
+
+        # try converting as list of arguments
+        elif re.findall(r' ?, ?', arg):
+            args = re.split(r' ?, ?', arg)
+
+            roles = [command_util.run_converter(commands.RoleConverter, ctx, x) for x in args]
+
+            return [r for r in roles if isinstance(r, discord.Role)]
 
 
 def setup(bot):

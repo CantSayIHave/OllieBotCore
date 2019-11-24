@@ -22,8 +22,8 @@ class Server(Hashable):
 
     __slots__ = ['name', 'mods', 'feeds', 'spam_time', 'reee_message',
                  'id', 'rolemods', 'spam_timers', 'block_list', 'search_results',
-                 'late', 'join_message', 'join_channel', 'leave_channel',
-                 'response_lib', 'music', 'capture', 'birthdays', 'default_role']
+                 'late', 'join_message', 'join_channel', 'leave_channel', 'message_changes',
+                 'response_lib', 'music', 'capture', 'birthdays', 'default_role', 'selfroles']
 
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', 'Default')
@@ -40,14 +40,18 @@ class Server(Hashable):
 
         self.default_role = kwargs.get('default_role', None)
 
-        # todo: rename rss to feeds (everywhere) and destroy commands
-        # todo: take music_queue instead of queue
+        # a list of ids
+        self.selfroles = kwargs.get('selfroles', [])
+        if self.selfroles is None:
+            self.selfroles = []
 
         # 12/13/17 update
         self.join_message = kwargs.get('join_msg', 'Welcome to the server, @u!')
         self.join_channel = kwargs.get('join_channel', '')
 
         self.leave_channel = kwargs.get('leave_channel', None)
+
+        self.message_changes = kwargs.get('message_changes', None)
 
         self.response_lib = ResponseLibrary(self.spam_time)
 
@@ -139,21 +143,24 @@ class Server(Hashable):
                     if feed.channel_id == channel_id and feed.discord_channel_id == discord_channel.id:
                         return feed
 
-    async def add_twitter_feed(self, handle: str):
+    async def add_twitter_feed(self, channel: discord.Channel, handle: str):
         feed = await global_util.olliebot_api.create_twitter_feed(handle)
         feed.first_time = True
+        feed.discord_channel_id = channel.id
         self.feeds.append(feed)
         return feed
 
-    async def add_twitch_feed(self, username):
+    async def add_twitch_feed(self, channel: discord.Channel, username):
         feed = await global_util.olliebot_api.create_twitch_feed(username)
         feed.first_time = True
+        feed.discord_channel_id = channel.id
         self.feeds.append(feed)
         return feed
 
-    async def add_youtube_feed(self, username=None, channel_id=None):
+    async def add_youtube_feed(self, channel: discord.Channel, username=None, channel_id=None):
         feed = await global_util.olliebot_api.create_youtube_feed(username=username, id=channel_id)
         feed.first_time = True
+        feed.discord_channel_id = channel.id
         self.feeds.append(feed)
         return feed
 

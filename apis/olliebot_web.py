@@ -1,4 +1,5 @@
 import aiohttp
+import json
 
 from util.feeds import *
 from util.exceptions import *
@@ -75,7 +76,7 @@ class OllieBotAPI:
         resp = await self._single_post_request(url, json={'type': 'twitter', 'handle': handle})
 
         if resp.status == 200:
-            raw_feed = await resp.json()
+            raw_feed = await self._extract_json(resp)
             return TwitterFeed(**raw_feed)
         elif resp.status == 400:
             raise HTTPBadRequest('Twitter feed request error')
@@ -108,7 +109,7 @@ class OllieBotAPI:
         resp = await self._single_post_request(url, json={'type': 'twitch', 'username': username})
 
         if resp.status == 200:
-            raw_feed = await resp.json()
+            raw_feed = await self._extract_json(resp)
             return TwitchFeed(**raw_feed)
         elif resp.status == 400:
             raise HTTPBadRequest('Twitch feed request error')
@@ -144,7 +145,7 @@ class OllieBotAPI:
         resp = await self._single_post_request(url, json=json_data)
 
         if resp.status == 200:
-            raw_feed = await resp.json()
+            raw_feed = await self._extract_json(resp)
             return YouTubeFeed(**raw_feed)
         elif resp.status == 400:
             raise HTTPBadRequest('Youtube feed request error')
@@ -180,7 +181,7 @@ class OllieBotAPI:
         resp = await self._single_get_request(url)
 
         if resp.status == 200:
-            raw_feed = await resp.json()
+            raw_feed = await self._extract_json(resp)
             return self.build_feed(raw_feed)
         elif resp.status == 400:
             raise HTTPBadRequest('Feed request error')
@@ -216,7 +217,7 @@ class OllieBotAPI:
         resp = await self._single_get_request(url)
 
         if resp.status == 200:
-            raw_feeds = await resp.json()
+            raw_feeds = await self._extract_json(resp)
 
             feeds_out = []
             for rfeed in raw_feeds:
@@ -237,14 +238,14 @@ class OllieBotAPI:
         url = self._build_url(api=self.RSS_API, endpoint='updatemany')
 
         resp = await self._single_post_request(url, json=feeds_out)
-
         if resp.status == 200:
-            raw_feeds = await resp.json()
+            raw_feeds = await self._extract_json(resp)
 
             return [self.build_feed(x) for x in raw_feeds]
         elif resp.status == 400:
             raise HTTPBadRequest('Feed update request error')
         else:
+            print('error response {}'.format(resp.status))
             raise RssApiError('Could not return feed updates for given channels')
 
     async def delete_feed(self, feed):
@@ -253,7 +254,7 @@ class OllieBotAPI:
         resp = await self._single_post_request(url, json=feed)
 
         if resp.status == 200:
-            deleted = await resp.json()
+            deleted = await self._extract_json(resp)
 
             return build_feed(deleted)
         elif resp.status == 400:
@@ -285,12 +286,11 @@ class OllieBotAPI:
     def _build_json(self, **kwargs):
         return {k: v for (k, v) in kwargs.items() if v is not None}
 
-    @staticmethod
-    async def _get_json(page: str) -> dict:
+    async def _get_json(self, page: str) -> dict:
         with aiohttp.ClientSession() as session:
             async with session.get(page) as resp:
                 if resp.status == 200:
-                    d = await resp.json()
+                    d = await self._extract_json(resp)
                     return d
 
     @staticmethod
@@ -308,9 +308,14 @@ class OllieBotAPI:
     @staticmethod
     def build_feed(raw_feed: dict) -> RssFeed:
         feed_type = raw_feed['type']
-        if feed_type == 'twitter':
+        if feed_type in ['twitter', 'TwitterFeed']:
             return TwitterFeed(**raw_feed)
-        elif feed_type == 'twitch':
+        elif feed_type in ['twitch', 'TwitchFeed']:
             return TwitchFeed(**raw_feed)
-        elif feed_type == 'youtube':
+        elif feed_type in ['youtube', 'YouTubeFeed']:
             return YouTubeFeed(**raw_feed)
+
+    @staticmethod
+    async def _extract_json(response):
+        data = await response.read()
+        return json.loads(data.decode('utf-8'))

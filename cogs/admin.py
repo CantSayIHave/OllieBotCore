@@ -33,6 +33,11 @@ class Admin:
                 nonlocal base_message, session_log
                 session_log += text
                 if len(session_log) > 500:
+                    # print what we have
+                    cut = session_log[:500]
+                    cut = cut[:cut.rfind('\n')+1]
+                    await self.bot.edit_message(base_message, '```python\n{}\n```'.format(cut))
+
                     # New message created here, so session log is cleared too
                     session_log = ''
                     base_message = self.bot.send_message(base_message.channel, '```python\n{}\n```'.format(text))
@@ -245,6 +250,88 @@ class Admin:
         async def checkadmin(ctx):
             result = self.bot.check_admin(ctx.message.author)
             await self.bot.say('check_admin shows you as: {}'.format(result))
+
+        @self.bot.group()
+        async def data():
+            pass
+
+        @data.command(pass_context=True)
+        async def tree(ctx):
+            """Returns generic bot object tree
+
+            Basic Structure
+            ---------------
+            Bot (name)
+            |
+            + - Server A
+                |
+                + - name
+                |
+                + - id
+                |
+                + - etc
+            """
+            if not self.bot.check_admin(ctx.message.author):
+                return
+
+            out = '**__Bot Tree__**:\n\n' \
+                  '```\n{} (ID: {})\n' \
+                  '|\n' \
+                  '+ - admins: {}\n' \
+                  '|\n' \
+                  '+ - ' \
+                  ''.format(self.bot.name, self.bot.user.id, len(self.bot.admins))
+
+            for server in self.bot.local_servers:
+                out += '{} (ID: {})\n' \
+                       '\t+ - mods:{}\n' \
+                       '\t+ - rolemods:{}' \
+                       '\t+ - feeds: {}\n' \
+                       '\t+ - spam timers: {}\n' \
+                       '\t+ - blocked: {}\n' \
+                       '\t+ - responses: {}\n' \
+                       '\t+ - birthdays: {}\n' \
+                       '|\n' \
+                       '+ - ' \
+                       ''.format(server.name, server.id, server.mods, server.rolemods, len(server.feeds),
+                                 len(server.spam_timers), len(server.block_list), len(server.response_lib.responses),
+                                 len(server.birthdays))
+
+            out = out[:-4] + '\n'
+
+            await self.bot.say('Debug: message size: {} characters'.format(len(out)))
+            if len(out) < 1996:
+                await self.bot.say(out + '\n```')
+            else:
+                while len(out) > 1000:
+                    end = out.find('\n', 1000)  # about half max length
+                    await self.bot.send_message(ctx.message.channel,
+                                                '{}\n```'.format(out[:end+1]))
+                    out = '```\n' + out[end+1:]
+                if out:
+                    await self.bot.send_message(ctx.message.channel,
+                                                out + '```')
+
+        @self.bot.command(pass_context=True)
+        async def pollvoice(ctx):
+            vc = self.bot.voice_client_in(ctx.message.server)
+            data = await vc.poll_voice_ws()
+            await self.bot.say('Data received: {} bytes'.format(len(data)))
+            await self.bot.say('Snippet: {}'.format(data[:50]))
+
+        @self.bot.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def logstest(server, ctx):
+            try:
+                found = start = None
+                async for message in self.bot.logs_from(ctx.message.channel, limit=5, before=ctx.message):
+                    start = message
+                await self.bot.say('Starting from: {}'.format(start.content))
+                async for message in self.bot.logs_from(ctx.message.channel, after=ctx.message):
+                    found = message
+                await self.bot.say('Succeeded with last message: {}'.format(found.content))
+            except Exception as e:
+                await self.bot.say('Failed: {}'.format(e))
 
     @staticmethod
     def extract_code(line: str) -> str:

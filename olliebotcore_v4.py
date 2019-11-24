@@ -1,4 +1,7 @@
 import asyncio
+import logging
+from logging.handlers import RotatingFileHandler
+import discord
 
 import storage_manager_v2 as storage
 from cogs import feeds
@@ -63,6 +66,12 @@ RemindMe (maybe)
 command control (maybe) (kinda did)
 
 """
+
+logger = logging.getLogger()  # discord
+logger.setLevel(logging.INFO)
+handler = RotatingFileHandler(filename='logs/discord.log', encoding='utf-8', mode='w', maxBytes=10000, backupCount=10)
+handler.setFormatter(logging.Formatter('[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s:%(name)s - %(message)s'))
+logger.addHandler(handler)
 
 random.seed()
 
@@ -149,6 +158,10 @@ async def background_async():
                     if server.feeds:
                         updated_feeds = await olliebot_api.update_feeds(server.feeds)
 
+                        if updated_feeds:
+                            await bot.send_message('338508402689048587', '<@305407800778162178> updating {} feeds'
+                                                                         ''.format(len(updated_feeds)))
+
                         # push feed updates
                         for u_feed in updated_feeds:
                             await feeds.send_update(bot, server, u_feed)
@@ -175,7 +188,7 @@ async def background_async():
                 break
 
         except Exception as e:
-            print('Async task loop error: {}'.format(e))
+            logging.exception("Background Async error")
 
 
 bot.load_cogs(startup_extensions)

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import storage_manager_v2 as storage
+import discord
 from discordbot import DiscordBot
 from util import global_util
 from util.feeds import *
@@ -39,14 +40,14 @@ class Feeds:
                     return
 
                 try:
-                    await server.add_twitter_feed(handle=user)
+                    await server.add_twitter_feed(feed_channel, handle=user)
                 except Exception as e:
                     await self.bot.say('No user `@{}` exists!\nExcept {}'.format(user, e))
                     return
 
                 storage.write_feeds(server)
                 await self.bot.say('Added Twitter feed for `@{}` to {}'.format(user, feed_channel.mention))
-                global_util.feeds_timer = 70
+                global_util.rss_timer = 70
 
             elif platform == 'twitch':
                 twitch_channel = await global_util.twitch.get_channel_from_name(user)
@@ -60,7 +61,7 @@ class Feeds:
                     return
 
                 try:
-                    await server.add_twitch_feed(username=user)
+                    await server.add_twitch_feed(feed_channel, username=user)
                 except:
                     await self.bot.say('Something went wrong, couldn\'t add feed :(')
                     return
@@ -68,7 +69,7 @@ class Feeds:
                 storage.write_feeds(server)
                 await self.bot.say('Added Twitch feed for `{}` to channel {}'.format(twitch_channel['display_name'],
                                                                                      feed_channel.mention))
-                global_util.feeds_timer = 70
+                global_util.rss_timer = 70
 
             elif platform == 'youtube':
 
@@ -107,7 +108,7 @@ class Feeds:
                     return
 
                 try:
-                    await server.add_youtube_feed(channel_id=channel_id)
+                    await server.add_youtube_feed(feed_channel, channel_id=channel_id)
                 except:
                     await self.bot.say('Something went wrong, couldn\'t add feed :(')
                     return
@@ -115,7 +116,7 @@ class Feeds:
                 storage.write_feeds(server)
                 await self.bot.say('Added YouTube feed for `{}` to channel {}'.format(yt_channel['snippet']['title'],
                                                                                       feed_channel.mention))
-                global_util.feeds_timer = 70
+                global_util.rss_timer = 70
 
         @rss.command(pass_context=True)
         @self.bot.test_high_perm
@@ -167,7 +168,7 @@ class Feeds:
                     await self.bot.say('No YouTube feed for `{}` exists on this channel'.format(user))
 
         @rss.command(pass_context=True)
-        async def listall(ctx, arg: str = None):
+        async def listall(ctx, arg=None):
             if not ctx.message.server:
                 await self.bot.say('Sorry, but this command is only accessible from a server')
                 return
@@ -179,26 +180,26 @@ class Feeds:
 
             if in_server.feeds:
                 out_str = ""
-                for r in in_server.feeds:  # type: Feed
-                    if r:
-                        if arg == 'debug':
-                            if r.type == 'twitter':
-                                out_str += 'User `@{}` has a Twitter feed on <#{}>, LID: {}\n'.format(r.uid,
-                                                                                                      r.channel_id,
-                                                                                                      r.last_id)
-                            elif r.type == 'youtube':
-                                out_str += 'User `{}` has a YouTube feed on <#{}>, LID: {}, CHID: {}\n'.format(
-                                    r.title, r.channel_id, r.last_id, r.uid)
-                            elif r.type == 'twitch':
-                                out_str += 'User `{}` has a Twitch feed on <#{}>, LID: {}, CHID: {},\n'.format(
-                                    r.title, r.channel_id, r.last_id, r.uid)
-                        else:
-                            if r.type == 'twitter':
-                                out_str += 'User `@{}` has a Twitter feed on <#{}>\n'.format(r.uid, r.channel_id)
-                            elif r.type == 'youtube':
-                                out_str += 'User `{}` has a YouTube feed on <#{}>\n'.format(r.title, r.channel_id)
-                            elif r.type == 'twitch':
-                                out_str += 'User `{}` has a Twitch feed on <#{}>\n'.format(r.title, r.channel_id)
+
+                if arg == 'debug':
+                    for r in in_server.feeds:  # type: Feed
+                        if isinstance(r, TwitterFeed):
+                            out_str += 'User `@{}` has a Twitter feed on <#{}>, ' \
+                                       'fid={}, lid={}\n'.format(r.handle, r.discord_channel_id, r.id, r.last_tweet_id)
+                        elif isinstance(r, YouTubeFeed):
+                            out_str += 'User `{}` has a YouTube feed on <#{}>, ' \
+                                       'fid={}, lid={}\n'.format(r.title, r.discord_channel_id, r.id, r.last_video_id)
+                        elif isinstance(r, TwitchFeed):
+                            out_str += 'User `{}` has a Twitch feed on <#{}>, ' \
+                                       'fid={}, lid={}\n'.format(r.title, r.discord_channel_id, r.id, r.last_stream_id)
+                else:
+                    for r in in_server.feeds:  # type: Feed
+                        if isinstance(r, TwitterFeed):
+                            out_str += 'User `@{}` has a Twitter feed on <#{}>\n'.format(r.handle, r.discord_channel_id)
+                        elif isinstance(r, YouTubeFeed):
+                            out_str += 'User `{}` has a YouTube feed on <#{}>\n'.format(r.title, r.discord_channel_id)
+                        elif isinstance(r, TwitchFeed):
+                            out_str += 'User `{}` has a Twitch feed on <#{}>\n'.format(r.title, r.discord_channel_id)
 
                 await self.bot.say(out_str)
 
@@ -219,7 +220,7 @@ class Feeds:
                     last_time = datetime.strptime(r.last_time[:r.last_time.find('.')], '%Y-%m-%dT%H:%M:%S')
                     last_time = last_time.replace(year=last_time.year - 1)
                     r.last_time = last_time.strftime('%Y-%m-%dT%H:%M:%S') + '.'  # WHAT WAS I THINKING
-                    global_util.feeds_timer = 70
+                    global_util.rss_timer = 70
 
         @rss.command(pass_context=True)
         async def clear(ctx):
@@ -235,6 +236,28 @@ class Feeds:
             await self.bot.say('Clearing all rss.')
             in_server.feeds = []
             storage.write_feeds(in_server)
+
+        @rss.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def setid(server, ctx, feed_id, new_content_id):
+            feed = server.get_feed(id=feed_id)
+
+            if not feed:
+                await self.bot.say('Feed not found.')
+                return
+
+            if isinstance(feed, TwitterFeed):
+                feed.last_tweet_id = int(new_content_id)
+            elif isinstance(feed, TwitchFeed):
+                feed.last_stream_id = new_content_id
+            elif isinstance(feed, YouTubeFeed):
+                feed.last_video_id = new_content_id
+
+            await self.bot.say('Updated.')
+
+            storage.write_feeds(server)
+
+            global_util.rss_timer = 60
 
         @rss.command(pass_context=True)
         async def help(ctx, arg: str = None):
@@ -269,19 +292,20 @@ class Feeds:
 async def send_update(bot: DiscordBot, server, new_feed: RssFeed):
     old_feed = server.get_feed(id=new_feed.id)  # type: RssFeed
     if old_feed:
+        await bot.send_message('338508402689048587', 'updating feed for {}'.format(server.name))
         old_feed.update(new_feed)
 
         if isinstance(old_feed, TwitterFeed):
-            await bot.send_message(old_feed.discord_channel_id,
+            await bot.send_message(discord.Object(id=old_feed.discord_channel_id),
                                    'https://twitter.com/{0}/status/{1}'.format(old_feed.handle, old_feed.last_tweet_id))
 
         elif isinstance(old_feed, TwitchFeed):
-            await bot.send_message(old_feed.discord_channel_id,
+            await bot.send_message(discord.Object(id=old_feed.discord_channel_id),
                                    '{} is now streaming!\nhttps://www.twitch.tv/{}'
-                                   ''.format(old_feed.title, old_feed.last_stream_id))
+                                   ''.format(old_feed.title, old_feed.user_id))
 
         elif isinstance(old_feed, YouTubeFeed):
-            await bot.send_message(old_feed.discord_channel_id,
+            await bot.send_message(discord.Object(id=old_feed.discord_channel_id),
                                    '@everyone\n{} has a new video!\n'
                                    'https://www.youtube.com/watch?v={}'
                                    ''.format(old_feed.title, old_feed.last_video_id))
@@ -294,19 +318,19 @@ async def send_update(bot: DiscordBot, server, new_feed: RssFeed):
 async def send_first_update(bot: DiscordBot, server, feed: RssFeed):
     feed.first_time = False
     if isinstance(feed, TwitterFeed):
-        await bot.send_message(feed.discord_channel_id,
+        await bot.send_message(discord.Object(id=feed.discord_channel_id),
                                'Twitter feed for `@{0}` has now been enabled.\n'
                                'https://twitter.com/{0}/status/{1}'
                                ''.format(feed.handle, feed.last_tweet_id))
 
     elif isinstance(feed, TwitchFeed):
-        await bot.send_message(feed.discord_channel_id,
+        await bot.send_message(discord.Object(id=feed.discord_channel_id),
                                'Twitch feed for {} has now been enabled. Here is the most '
                                'recent activity:\nhttps://www.twitch.tv/{}'
-                               ''.format(feed.title, feed.last_stream_id))
+                               ''.format(feed.title, feed.user_id))
 
     elif isinstance(feed, YouTubeFeed):
-        await bot.send_message(feed.discord_channel_id,
+        await bot.send_message(discord.Object(id=feed.discord_channel_id),
                                'Youtube feed for {} has now been enabled. All future '
                                'updates will now push `@everyone` mentions for '
                                'visibility. Here is the most recent video for this'

@@ -21,6 +21,12 @@ getraw = form('`{0}getraw [message id]`\n'
 getraw.add_tagline('get the raw string from a message')
 
 
+nickname = form('`{0}<nickname/nick> [@member] [new name/\'reset\']`\n'
+                'Set someone\'s nickname. You must have proper '
+                'permissions to do this.\n'
+                '*Note: `reset` will remove a member\'s nickname*\n')
+
+
 nick_all = form('`{0}nick-all [new name]`\n'
                 '`{0}nick-all <reset>`\n'
                 'Change the nickname of everyone on the server to '

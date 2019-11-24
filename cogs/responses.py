@@ -156,6 +156,9 @@ class Responses:
             em = self.build_embed(new_options, 0xf4e542, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
             await self.bot.say(embed=em)
 
+            if len(new_options['content']) > 2048:
+                await self.bot.say('**Content:** {}'.format(new_options['content']))
+
         @response.command(pass_context=True)
         async def append(ctx, method: str, name: str, to_append: str):
             if not ctx.message.server:
@@ -202,6 +205,9 @@ class Responses:
 
             em = self.build_embed(options, 0xf4e542, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
             await self.bot.say(embed=em)
+
+            if len(options['content']) > 2048:
+                await self.bot.say('**Content:** {}'.format(options['content']))
 
         @response.command(pass_context=True)
         async def transfer(ctx, name: str, to_server_name: str):
@@ -261,7 +267,11 @@ class Responses:
             options = self.get_display(resp.__dict__)
 
             em = self.build_embed(options, 0x41f45c, 'https://abs.twimg.com/emoji/v2/72x72/1f4dd.png')
+
             await self.bot.say(embed=em)
+
+            if len(options['content']) > 2048:
+                await self.bot.say('**Content:** {}'.format(options['content']))
 
         @response.command(pass_context=True)
         async def listall(ctx):
@@ -296,6 +306,48 @@ class Responses:
                                      icon='https://abs.twimg.com/emoji/v2/72x72/1f4d1.png',
                                      color=0xff00dc,
                                      author=ctx.message.author)
+
+        @response.command(pass_context=True)
+        @self.bot.test_high_perm
+        async def image(server, ctx, operation, target, *, url):
+
+            target = target.lower()
+
+            resp = server.response_lib.get(target, by_name=True)  # type: Response
+            if not resp:
+                await self.bot.say('`{0}` does not exist in the response library. Use `{1}response add` to add it.'
+                                   ''.format(target, self.bot.command_prefix))
+                return
+
+            if not operation.startswith(('add', 'rem')):
+                await self.bot.say('Please format as {}response image <add/remove> [target] [image url/#]'
+                                   ''.format(self.bot.command_prefix))
+                return
+
+            if not resp.is_image:
+                await self.bot.say('**{}** is not an image response!'.format(target))
+                return
+
+            if operation == 'add':
+                url_list = None
+                if ',' in url:
+                    url_list = url.split(',')
+                elif not global_util.validate_url(url):
+                    await self.bot.say('The url provided is invalid.')
+                    return
+
+                fixed_coding = self.fix_album(resp.content)
+                if url_list:
+                    for u in url_list:
+                        if global_util.validate_url(u):
+                            fixed_coding += ' @r {}'.format(u)
+                else:
+                    fixed_coding += ' @r  {}'.format(url)
+                resp.content = fixed_coding
+                storage.write_responses(server)
+                await self.bot.say('Added image to response **{}** ✅'.format(target))
+            else:
+                await self.bot.say('Utility not implemented (but it will be)')
 
         @response.command(pass_context=True)
         async def help(ctx, arg: str = None):
@@ -549,9 +601,27 @@ class Responses:
         em.add_field(name='author', value=options['author'])
         em.add_field(name='search-type', value=options['search-type'])
         em.add_field(name='delete', value=options['delete'])
-        em.add_field(name='content', value=options['content'])
+        content = options['content']
+        if len(content) <= 1024:
+            em.add_field(name='content', value=content)
+        if 1024 < len(content) <= (2048 - len('Content: ')):
+            em.set_footer(text='**Content:** {}'.format(content))
         return em
 
+    @staticmethod
+    def fix_album(coding):
+        coding = coding.replace(' @m  @m ', ' @m ')
+        coding = coding.replace(' @m  @r ', ' @r ')
+        coding = coding.replace(' @r  @m ', ' @r ')
+        coding = coding.replace(' @r  @r ', ' @r ')
+
+        if coding.startswith(' @r '):
+            coding = coding[4:]
+
+        if coding.endswith(' @r '):
+            coding = coding[:-4]
+
+        return coding
 
 async def execute_responses(msg: discord.Message, bot: commands.Bot, in_server: Server, content_lower: str):
     high_perm = bot.has_high_permissions(msg.author, in_server)

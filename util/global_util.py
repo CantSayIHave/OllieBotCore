@@ -71,6 +71,19 @@ def extract_mention_id(id: str):
     return out
 
 
+url_regex = re.compile(
+        r'^(?:http|ftp)s?://' # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
+        r'localhost|' #localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+        r'(?::\d+)?' # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+
+def validate_url(url):
+    return re.match(url_regex, url)
+
+
 def yt_shortened_to_long(link: str):
     if 'https://youtu.be' in link:
         link_parts = link.rsplit('/', maxsplit=1)
@@ -202,6 +215,14 @@ def iterfind(iterable, check, default=None):
     return default
 
 
+def bool_eval(text):
+    if text.lower() in ['yes', 'y', 'ya', 'yea', 'yeah', 'yup', 'true', 't', 'yes please', 'hit me up', 'hell yeah']:
+        return True
+    elif text.lower() in ['n', 'no', 'nah', 'nah fam', 'please no', 'god no', 'no thanks', 'false', 'f']:
+        return False
+    # else return None
+
+
 # time in seconds
 def schedule_delete(bot, msg, time: int):
     delete_queue.append(DeleteMessage(message=msg, bot=bot, timer=time))
@@ -281,6 +302,9 @@ rss_timer = 60
 # global bad timer
 bad_timer = 0
 
+# global shoe jesus timer
+shoe_jesus_timer = 0
+
 internal_shutdown = False
 
 sync_shutdown = False
@@ -302,6 +326,8 @@ TIME_RSS_LOOP = 70  # in seconds
 TIME_ASYNC_EXIT = 60  # in seconds
 
 TIME_MUSIC_TIMEOUT = 120  # in seconds
+
+TIME_SHOE_JESUS = 2700
 
 OWNER_ID = '305407800778162178'
 

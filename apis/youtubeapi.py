@@ -285,9 +285,11 @@ class YoutubeAPI:
 
         params['key'] = self.youtube_key
 
-        async with aiohttp.get(url + "?" + urllib.parse.urlencode(params)) as f:
-            data = await f.read()
-            f.close()
+        url = url + "?" + urllib.parse.urlencode(params)
+
+        resp = await self._single_get_request(url)
+
+        data = await resp.read()
 
         return data
 
@@ -310,3 +312,15 @@ class YoutubeAPI:
                 params[item[0]] = item[1]
 
         return params
+
+    @staticmethod
+    async def _single_post_request(url: str, **kwargs):
+        with aiohttp.ClientSession() as session:
+            async with session.post(url, **kwargs) as resp:
+                return resp
+
+    @staticmethod
+    async def _single_get_request(url: str):
+        with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                return resp
