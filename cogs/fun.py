@@ -18,6 +18,7 @@ from apis.strawpoll import *
 from discordbot import DiscordBot
 from util import global_util, command_util
 from util.global_util import *
+import re
 
 num2regional = {0: '0⃣',
                 1: '1⃣',
@@ -1518,6 +1519,24 @@ class Fun:
         async def bclap(ctx, *, arg: str):
             output = '👏🏿'.join(arg.split()) + '👏🏿'
             await self.bot.say(output[:1999])
+
+        @self.bot.command(pass_context=True, aliases=['uwufy', 'owofy', 'owoify'])
+        async def uwuify(ctx, *, texty_wexty: str):
+            """ Uwuify some texty wexty
+            Used source code from https://github.com/bropez/uwu_maker/blob/master/uwuify.py
+            Thank you, bropez
+            """
+            texty_wexty = texty_wexty.lower()
+            texty_wexty = texty_wexty.replace("s", "sh")
+            texty_wexty = texty_wexty.replace("r", "w")
+            texty_wexty = re.sub(r'(?<!lo)l(?!ol)', 'w', texty_wexty)
+            texty_wexty = texty_wexty.replace("lol", "lowl")
+            texty_wexty = re.sub(r'(?<!w)u(?!w)', 'uwu', texty_wexty)
+            texty_wexty = re.sub(r'(?<!w)o(?!w)', 'owo', texty_wexty)
+            texty_wexty = texty_wexty.replace("you", "u")
+            texty_wexty = texty_wexty.replace("uck", "ucky wucky")
+
+            await self.bot.say(texty_wexty)
 
     @staticmethod
     def is_num(text: str):
