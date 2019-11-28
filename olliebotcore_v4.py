@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 import discord
 
 import storage_manager_v2 as storage
-from cogs import feeds
+# from cogs import feeds
 from server import Server
 from util import global_util
 from util.global_util import *
@@ -77,7 +77,8 @@ random.seed()
 
 async_exit_timer = 0
 
-startup_extensions = ["server_utils", "feeds", "fun", "responses", "music", "think", "sense", "help", "photoshop", "admin"]
+# removed feeds for now
+startup_extensions = ["server_utils", "fun", "responses", "music", "think", "sense", "help", "photoshop", "admin"]
 
 startup_extensions = ['cogs.{}'.format(x) for x in startup_extensions]
 
@@ -147,6 +148,8 @@ async def background_async():
             if global_util.alive_timer > 6:
                 global_util.alive_timer = 0
 
+            # someday I will do this right
+            """
             # |-----------[ Update Rss Feeds ]-----------|
             global_util.rss_timer += 10
 
@@ -172,7 +175,7 @@ async def background_async():
                         for n_feed in new_feeds:
                             await feeds.send_first_update(bot, server, n_feed)
 
-                        storage.write_feeds(server)
+                        storage.write_feeds(server)"""
 
             # |-----------[ Last Resort Restart ]-----------|
             global_util.exit_timer += 10
@@ -183,12 +186,12 @@ async def background_async():
             if global_util.internal_shutdown and (not storage.save_in_progress):
                 print('async shutting down...')
                 flush_delete_queue()
-                asyncio.sleep(2)
+                await asyncio.sleep(2)
                 await bot.logout()
                 break
 
         except Exception as e:
-            logging.exception("Background Async error")
+            logging.exception("Background Async error - {}".format(e))
 
 
 bot.load_cogs(startup_extensions)
@@ -201,7 +204,7 @@ loop = asyncio.get_event_loop()
 
 loop.create_task(bot.start(bot.token))
 
-loop.create_task(twitch.initialize())  # async library requires init
+# loop.create_task(twitch.initialize())  # async library requires init
 loop.create_task(handle_queues())
 loop.create_task(scheduler.task_loop())  # datetime callback scheduling
 
@@ -215,6 +218,7 @@ finally:
     except:
         exit(5)
 
+# an error code 5 tells the bootstrapper not to restart
 if global_util.internal_shutdown:
     exit(5)
 exit(1)
