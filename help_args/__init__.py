@@ -7,7 +7,7 @@ Help documentation for each command
 from .fun import *
 from .utilities import *
 from .admin import *
-from . import music
+from .music import *
 
 help_taglines = {'audioconvert': {'d': 'convert audio to different format', 'm': False},
                  'clear': {'d': 'clear bot messages', 'm': True},
